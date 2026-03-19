@@ -1,0 +1,30 @@
+{
+  "name": "ticketmind-backend",
+  "version": "0.1.0",
+  "description": "TicketMind backend service",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.11",
+    "npm": ">=10.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --ext .ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:one": "vitest run --testNamePattern"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mongoose": "^8.8.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.10",
+    "@types/mongoose": "^5.11.97",
+    "eslint": "^9.13.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.3"
+  }
+}
