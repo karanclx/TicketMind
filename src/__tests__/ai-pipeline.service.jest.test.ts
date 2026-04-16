@@ -1,11 +1,11 @@
-import { describe, expect, it, jest } from "@jest/globals"
+import { describe, expect, it, vi } from "vitest"
 
 import { AiPipelineService } from "../modules/ai-pipeline/ai-pipeline.service.js"
 import type { LlmClient } from "../modules/ai-pipeline/llm-client.js"
 
 describe("AiPipelineService", () => {
   it("processes all three steps with mock LLM", async () => {
-    const completeJson = jest
+    const completeJson = vi
       .fn<
         LlmClient["completeJson"]
       >()
@@ -47,7 +47,7 @@ describe("AiPipelineService", () => {
   })
 
   it("retries step and falls back if invalid output persists", async () => {
-    const completeJson = jest
+    const completeJson = vi
       .fn<
         LlmClient["completeJson"]
       >()

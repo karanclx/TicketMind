@@ -1,5 +1,5 @@
 import request from "supertest"
-import { describe, expect, it } from "@jest/globals"
+import { describe, expect, it } from "vitest"
 import express from "express"
 
 import { errorHandler } from "../middleware/error-handler.js"
