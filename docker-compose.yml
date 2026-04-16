@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  ticketmind-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ticketmind-api
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "node", "-e", "http.get('http://localhost:3000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mongo:
+    image: mongo:7
+    container_name: ticketmind-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
