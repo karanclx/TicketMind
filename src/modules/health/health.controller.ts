@@ -12,10 +12,11 @@ const healthQuerySchema = z.object({
 export class HealthController {
   public async getHealth(_req: Request, res: Response): Promise<void> {
     const query = validatePayload(healthQuerySchema, _req.query)
-    const queue = ticketQueue.stats()
+    const organizationId = _req.auth!.organizationId
+    const queue = ticketQueue.stats(organizationId)
     const includeDeadLetter = query.include_dead_letter === "true"
-    const jobStatus = query.job_id ? ticketQueue.getJobStatus(query.job_id) : null
-    const deadLetter = includeDeadLetter ? ticketQueue.deadLetterJobs() : undefined
+    const jobStatus = query.job_id ? ticketQueue.getJobStatus(query.job_id, organizationId) : null
+    const deadLetter = includeDeadLetter ? ticketQueue.deadLetterJobs(organizationId) : undefined
 
     res.status(200).json({
       status: "ok",

@@ -25,3 +25,10 @@ export class ValidationError extends AppError {
     this.name = "ValidationError"
   }
 }
+
+export class AuthenticationError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super(message, 401, "AUTHENTICATION_ERROR", details)
+    this.name = "AuthenticationError"
+  }
+}

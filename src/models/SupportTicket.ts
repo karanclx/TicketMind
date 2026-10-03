@@ -13,6 +13,7 @@ const rawInputSchema = new Schema(
 
 const supportTicketSchema = new Schema(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: "Organization", required: true, index: true },
     rawInput: { type: rawInputSchema, required: true },
     normalizedTitle: { type: String, required: true, trim: true },
     normalizedDescription: { type: String, required: true, trim: true },
@@ -34,9 +35,11 @@ const supportTicketSchema = new Schema(
 )
 
 supportTicketSchema.index({ status: 1, createdAt: -1 })
+supportTicketSchema.index({ organizationId: 1, status: 1, createdAt: -1 })
 
 export type SupportTicket = InferSchemaType<typeof supportTicketSchema> & {
   _id: Types.ObjectId
+  organizationId: Types.ObjectId
   rawInput: {
     title: string
     description: string

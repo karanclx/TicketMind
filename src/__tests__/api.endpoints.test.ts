@@ -7,11 +7,17 @@ import { notFoundHandler } from "../middleware/not-found.js"
 import { asyncHandler } from "../lib/async-handler.js"
 
 describe("API endpoints", () => {
+  const mockAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    req.auth = { organizationId: "org-1" }
+    next()
+  }
+
   it("POST /tickets returns accepted status", async () => {
     const app = express()
     app.use(express.json())
     app.post(
       "/tickets",
+      mockAuth,
       asyncHandler(async (_req, res) => {
         res.status(202).json({ id: "661111111111111111111111", status: "queued", job_id: "job-1" })
       })
@@ -35,7 +41,7 @@ describe("API endpoints", () => {
     const app = express()
     app.get(
       "/tickets/:id",
-      asyncHandler(async (req, res) => {
+      mockAuth, asyncHandler(async (req, res) => {
         res.status(200).json({
           id: req.params["id"],
           status: "processed",
@@ -65,7 +71,7 @@ describe("API endpoints", () => {
     const app = express()
     app.post(
       "/tickets/:id/process",
-      asyncHandler(async (req, res) => {
+      mockAuth, asyncHandler(async (req, res) => {
         res.status(202).json({ id: req.params["id"], status: "queued", job_id: "job-2" })
       })
     )

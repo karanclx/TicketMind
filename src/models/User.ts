@@ -1,44 +1,23 @@
-import { Schema, model, type InferSchemaType, type Model } from "mongoose";
+import { Schema, model, type InferSchemaType, type Model, Types } from "mongoose"
 
 const userSchema = new Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      minlength: 2,
-      maxlength: 120
-    },
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      lowercase: true,
-      minlength: 5,
-      maxlength: 254
-    },
-    password: {
-      type: String,
-      required: true,
-      minlength: 8,
-      maxlength: 255,
-      select: false
-    },
-    role: {
-      type: String,
-      required: true,
-      enum: ["admin", "agent", "user"],
-      default: "user"
-    }
+    organizationId: { type: Schema.Types.ObjectId, ref: "Organization", required: true, index: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    passwordHash: { type: String, required: true, select: false },
+    role: { type: String, enum: ["owner", "admin", "member"], default: "member" },
+    lastLoginAt: { type: Date, required: false }
   },
   {
     timestamps: true,
     versionKey: false
   }
-);
+)
 
-userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ organizationId: 1, email: 1 }, { unique: true })
 
-export type User = InferSchemaType<typeof userSchema>;
-export const UserModel: Model<User> = model<User>("User", userSchema);
+export type User = InferSchemaType<typeof userSchema> & {
+  _id: Types.ObjectId
+}
+
+export const UserModel: Model<User> = model<User>("User", userSchema)

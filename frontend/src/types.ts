@@ -14,6 +14,8 @@ export type TicketCreateResponse = {
 export type TicketDetail = {
   id: string
   status: "pending" | "processing" | "processed" | "failed"
+  created_at: string
+  updated_at: string
   raw_input: {
     title: string
     description: string

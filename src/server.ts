@@ -13,20 +13,19 @@ const start = async (): Promise<void> => {
 
   const shutdown = (signal: string) => {
     logger.info({ signal }, "Shutting down server")
-    server.close(async (error) => {
+    server.close((error) => {
       if (error) {
         logger.error({ error }, "Error during HTTP server shutdown")
         process.exit(1)
         return
       }
 
-      try {
-        await disconnectMongo()
-        process.exit(0)
-      } catch (disconnectError) {
-        logger.error({ error: disconnectError }, "Error during MongoDB disconnect")
-        process.exit(1)
-      }
+      disconnectMongo()
+        .then(() => process.exit(0))
+        .catch((disconnectError: unknown) => {
+          logger.error({ error: disconnectError }, "Error during MongoDB disconnect")
+          process.exit(1)
+        })
     })
   }
 
@@ -34,7 +33,7 @@ const start = async (): Promise<void> => {
   process.on("SIGINT", () => shutdown("SIGINT"))
 }
 
-start().catch((error) => {
+start().catch((error: unknown) => {
   logger.fatal({ error }, "Failed to start server")
   process.exit(1)
 })

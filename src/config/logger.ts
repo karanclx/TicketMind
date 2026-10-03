@@ -14,13 +14,24 @@ const shouldLog = (level: LogLevel): boolean => {
   return levelRank[level] >= levelRank[env.LOG_LEVEL]
 }
 
+// Error's message/stack are non-enumerable, so JSON.stringify would emit `{}`.
+const errorReplacer = (_key: string, value: unknown): unknown => {
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack }
+  }
+  return value
+}
+
 const write = (level: LogLevel, context: unknown, message: string): void => {
   if (!shouldLog(level)) {
     return
   }
 
   const payload = context === undefined ? {} : context
-  const line = JSON.stringify({ level, message, ...((payload as Record<string, unknown>) ?? {}) })
+  const line = JSON.stringify(
+    { level, message, ...((payload as Record<string, unknown>) ?? {}) },
+    errorReplacer
+  )
 
   if (level === "error" || level === "fatal") {
     console.error(line)

@@ -7,12 +7,17 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error", "fatal"]).default("info"),
   SERVICE_NAME: z.string().min(1).default("ticketmind-api"),
   SERVICE_VERSION: z.string().min(1).default("0.1.0"),
+  SESSION_SECRET: z.string().min(1, "SESSION_SECRET is required"),
   LLM_PROVIDER: z.string().min(1).default("mock"),
   LLM_API_KEY: z.string().optional().default(""),
   LLM_MODEL: z.string().optional().default(""),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
   LLM_MAX_RETRIES: z.coerce.number().int().min(0).default(2),
-  LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2)
+  LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
+  STRIPE_SECRET_KEY: z.string().min(1, "STRIPE_SECRET_KEY is required"),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1, "STRIPE_WEBHOOK_SECRET is required"),
+  STRIPE_PRICE_ID_STARTER: z.string().min(1, "STRIPE_PRICE_ID_STARTER is required"),
+  STRIPE_PRICE_ID_GROWTH: z.string().min(1, "STRIPE_PRICE_ID_GROWTH is required")
 })
 
 const parsed = envSchema.safeParse(process.env)

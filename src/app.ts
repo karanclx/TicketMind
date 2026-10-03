@@ -7,14 +7,26 @@ import { errorHandler } from "./middleware/error-handler.js"
 import { notFoundHandler } from "./middleware/not-found.js"
 import { healthRouter } from "./modules/health/health.routes.js"
 import { ticketRouter } from "./modules/tickets/ticket.routes.js"
+import { authRoutes } from "./modules/auth/auth.routes.js"
+import { billingRouter } from "./modules/billing/billing.routes.js"
 import { env } from "./config/env.js"
+import cookieParser from "cookie-parser"
 
 export const createApp = () => {
   const app = express()
 
-  app.use(cors())
-  app.use(express.json({ limit: "1mb" }))
+  app.use(cors({ origin: true, credentials: true }))
 
+  // Mount webhook route BEFORE express.json() so it can use express.raw()
+  app.use("/billing/webhook", express.raw({ type: "application/json" }))
+
+  app.use(express.json({ limit: "1mb" }))
+  app.use(cookieParser())
+
+  // Mount the rest of the billing routes (they use express.json since it's above)
+  app.use("/billing", billingRouter)
+
+  app.use("/auth", authRoutes)
   app.use("/health", healthRouter)
   app.use("/tickets", ticketRouter)
 

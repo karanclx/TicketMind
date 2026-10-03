@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 
 export type QueuePayload = {
   ticketId: string
+  organizationId: string
   incrementReprocessCount: boolean
 }
 
@@ -18,6 +19,7 @@ type JobStatus = "queued" | "processing" | "retrying" | "completed" | "dead_lett
 type JobTracking = {
   jobId: string
   ticketId: string
+  organizationId: string
   status: JobStatus
   attempt: number
   maxAttempts: number
@@ -36,6 +38,18 @@ type QueueStats = {
 
 type ProcessCallback = (payload: QueuePayload) => Promise<void>
 
+/**
+ * In-process job queue with retry/backoff and dead-letter tracking.
+ *
+ * LIMITATION: all state (pending jobs, retry timers, job tracking, dead-letter
+ * entries) lives only in this process's memory.
+ * - A restart or crash loses every queued, retrying and dead-lettered job; tickets
+ *   caught mid-flight stay in "pending"/"processing" in MongoDB with no job to finish them.
+ * - It does not work across multiple instances: each process has its own queue, and
+ *   GET /health only reports the queue of whichever instance served the request.
+ * A persistent broker (e.g. Redis/BullMQ) would be needed to lift this; that is
+ * intentionally out of scope for now. See "Known Limitations" in README.md.
+ */
 export class TicketQueue {
   private readonly queue: QueueJob[] = []
   private readonly tracking = new Map<string, JobTracking>()
@@ -45,10 +59,11 @@ export class TicketQueue {
 
   constructor(private readonly processFn: ProcessCallback) {}
 
-  public enqueue(ticketId: string, incrementReprocessCount = false): { jobId: string } {
+  public enqueue(ticketId: string, organizationId: string, incrementReprocessCount = false): { jobId: string } {
     const job: QueueJob = {
       jobId: randomUUID(),
       ticketId,
+      organizationId,
       attempt: 1,
       maxAttempts: this.maxAttempts,
       incrementReprocessCount,
@@ -59,52 +74,64 @@ export class TicketQueue {
     this.tracking.set(job.jobId, {
       jobId: job.jobId,
       ticketId: job.ticketId,
+      organizationId: job.organizationId,
       status: "queued",
       attempt: job.attempt,
       maxAttempts: job.maxAttempts,
       updatedAt: new Date().toISOString()
     })
 
-    this.run().catch((error) => {
+    this.run().catch((error: unknown) => {
       logger.error({ error }, "Queue run failed")
     })
 
     return { jobId: job.jobId }
   }
 
-  public getJobStatus(jobId: string): JobTracking | null {
-    return this.tracking.get(jobId) ?? this.deadLetter.get(jobId) ?? null
+  public getJobStatus(jobId: string, organizationId: string): JobTracking | null {
+    const job = this.tracking.get(jobId) ?? this.deadLetter.get(jobId) ?? null
+    // If the job belongs to someone else, hide it
+    if (job && job.organizationId !== organizationId) {
+      return null
+    }
+    return job
   }
 
-  public stats(): QueueStats {
+  public stats(organizationId: string): QueueStats {
     let processing = 0
     let retrying = 0
     let completed = 0
+    let queued = 0
+    let deadLetter = 0
+
+    for (const item of this.queue) {
+      if (item.organizationId === organizationId) queued++
+    }
 
     for (const item of this.tracking.values()) {
-      if (item.status === "processing") {
-        processing += 1
-      }
-      if (item.status === "retrying") {
-        retrying += 1
-      }
-      if (item.status === "completed") {
-        completed += 1
-      }
+      if (item.organizationId !== organizationId) continue
+      
+      if (item.status === "processing") processing += 1
+      if (item.status === "retrying") retrying += 1
+      if (item.status === "completed") completed += 1
+    }
+
+    for (const item of this.deadLetter.values()) {
+      if (item.organizationId === organizationId) deadLetter += 1
     }
 
     return {
-      active: this.active,
-      queued: this.queue.length,
+      active: this.active, // Queue runner active state is global
+      queued,
       processing,
       retrying,
       completed,
-      deadLetter: this.deadLetter.size
+      deadLetter
     }
   }
 
-  public deadLetterJobs(): JobTracking[] {
-    return [...this.deadLetter.values()]
+  public deadLetterJobs(organizationId: string): JobTracking[] {
+    return [...this.deadLetter.values()].filter(job => job.organizationId === organizationId)
   }
 
   private async run(): Promise<void> {
@@ -127,6 +154,7 @@ export class TicketQueue {
       try {
         await this.processFn({
           ticketId: job.ticketId,
+          organizationId: job.organizationId,
           incrementReprocessCount: job.incrementReprocessCount
         })
 
@@ -151,13 +179,14 @@ export class TicketQueue {
             this.queue.push({
               jobId: job.jobId,
               ticketId: job.ticketId,
+              organizationId: job.organizationId,
               attempt: nextAttempt,
               maxAttempts: job.maxAttempts,
               createdAt: job.createdAt,
               incrementReprocessCount: false
             })
 
-            this.run().catch((runError) => {
+            this.run().catch((runError: unknown) => {
               logger.error({ error: runError }, "Queue retry run failed")
             })
           }, delay)
