@@ -27,9 +27,10 @@ export class BillingController {
       // req.body must be the raw Buffer
       await billingService.handleWebhook(signature as string, req.body)
       res.status(200).send({ received: true })
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ error }, "Stripe webhook failed")
-      res.status(400).send(`Webhook Error: ${error.message}`)
+      const msg = error instanceof Error ? error.message : String(error)
+      res.status(400).send(`Webhook Error: ${msg}`)
     }
   }
 }

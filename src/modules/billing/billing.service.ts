@@ -1,3 +1,4 @@
+import Stripe from "stripe"
 import { stripe } from "../../lib/stripe.js"
 import { env } from "../../config/env.js"
 import { OrganizationModel, PLAN_QUOTAS } from "../../models/Organization.js"
@@ -70,16 +71,17 @@ export class BillingService {
   }
 
   public async handleWebhook(signature: string, rawBody: Buffer): Promise<void> {
-    let event
+    let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(rawBody, signature, env.STRIPE_WEBHOOK_SECRET)
-    } catch (err: any) {
-      throw new Error(`Webhook Error: ${err.message}`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      throw new Error(`Webhook Error: ${msg}`)
     }
 
     switch (event.type) {
       case "checkout.session.completed": {
-        const session = event.data.object
+        const session = event.data.object as Stripe.Checkout.Session
         if (session.mode === "subscription" && session.subscription) {
           const organizationId = session.metadata?.["organizationId"]
           if (organizationId) {
@@ -94,13 +96,13 @@ export class BillingService {
       }
       
       case "customer.subscription.updated": {
-        const subscription = event.data.object
+        const subscription = event.data.object as Stripe.Subscription
         await this.syncSubscriptionToOrg(subscription)
         break
       }
 
       case "customer.subscription.deleted": {
-        const subscription = event.data.object
+        const subscription = event.data.object as Stripe.Subscription
         await this.syncSubscriptionToOrg(subscription)
         break
       }
@@ -111,8 +113,8 @@ export class BillingService {
     }
   }
 
-  private async syncSubscriptionToOrg(subscription: any): Promise<void> {
-    const customerId = subscription.customer as string
+  private async syncSubscriptionToOrg(subscription: Stripe.Subscription): Promise<void> {
+    const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id
     const org = await OrganizationModel.findOne({ stripeCustomerId: customerId })
     
     if (!org) {
@@ -121,7 +123,8 @@ export class BillingService {
     }
 
     // Determine plan from price ID
-    const priceId = subscription.items?.data[0]?.price?.id
+    const firstItem = subscription.items?.data?.[0]
+    const priceId = firstItem?.price?.id
     let plan = org.plan
 
     // Only map paid plans if the subscription is not deleted
@@ -137,11 +140,16 @@ export class BillingService {
 
     const quota = PLAN_QUOTAS[plan as "trial" | "starter" | "growth"] ?? PLAN_QUOTAS["trial"]
 
+    // Fetch the correct period end (Basil version 2025-03-31+)
+    const currentPeriodEnd = firstItem?.current_period_end
+
     // Update organization safely. Stripe can redeliver these events.
     // The operation is fully idempotent: if we receive identical state, we simply overwrite it.
     org.stripeSubscriptionId = subscription.id
-    org.subscriptionStatus = subscription.status
-    org.currentPeriodEnd = new Date(subscription.current_period_end * 1000)
+    org.subscriptionStatus = subscription.status as any
+    if (currentPeriodEnd) {
+      org.currentPeriodEnd = new Date(currentPeriodEnd * 1000)
+    }
     org.plan = plan
     org.monthlyTicketQuota = quota
 

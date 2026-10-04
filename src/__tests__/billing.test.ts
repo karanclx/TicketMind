@@ -106,10 +106,12 @@ describe("Billing", () => {
             customer: "cus_123",
             id: "sub_123",
             status: "active",
-            current_period_end: 1712345678,
             items: {
               data: [
-                { price: { id: "price_1" } } // mock starter
+                { 
+                  price: { id: "price_1" }, // mock starter
+                  current_period_end: 1712345678 
+                } 
               ]
             }
           }
@@ -162,7 +164,13 @@ describe("Billing", () => {
             customer: "cus_123",
             id: "sub_123",
             status: "canceled",
-            current_period_end: 1712345678
+            items: {
+              data: [
+                {
+                  current_period_end: 1712345678
+                }
+              ]
+            }
           }
         }
       })
