@@ -1,9 +1,8 @@
-import mongoose from "mongoose"
 import { OrganizationModel } from "../../models/Organization.js"
 import { UserModel } from "../../models/User.js"
-import { hashPassword, verifyPassword, signSessionToken, type SessionPayload } from "../../lib/auth.js"
+import { hashPassword, verifyPassword, type SessionPayload } from "../../lib/auth.js"
 import { AuthenticationError, ValidationError } from "../../lib/errors.js"
-import type { SignupInput, LoginInput } from "./auth.schemas.js"
+import type { SignupInput, LoginInput, RequesterSignupInput } from "./auth.schemas.js"
 import crypto from "crypto"
 
 function generateSlug(name: string): string {
@@ -49,6 +48,23 @@ export class AuthService {
     } catch (error) {
       // Manual cleanup on failure
       await OrganizationModel.deleteOne({ _id: organization._id })
+      throw error
+    }
+  }
+
+  async joinAsRequester(input: RequesterSignupInput): Promise<SessionPayload> {
+    const requesterInviteHash = crypto.createHash("sha256").update(input.invite).digest("hex")
+    const organization = await OrganizationModel.findOne({ requesterInviteHash })
+    if (!organization) throw new ValidationError("This requester signup link is invalid or has been replaced. Ask your helpdesk for a new link.")
+    if (await UserModel.findOne({ email: input.email })) throw new ValidationError("Email already in use. Sign in with your existing account.")
+    try {
+      const user = await UserModel.create({
+        organizationId: organization._id, email: input.email,
+        passwordHash: await hashPassword(input.password), role: "member"
+      })
+      return { userId: user._id.toString(), organizationId: organization._id.toString(), role: "member" }
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === 11000) throw new ValidationError("Email already in use")
       throw error
     }
   }

@@ -1,3 +1,4 @@
+import { SUPPORT_ROLES } from "../support/support-policy.js"
 import type { Request, Response } from "express"
 
 import { validatePayload } from "../../lib/validate.js"
@@ -10,7 +11,7 @@ export class TicketController {
     const payload = validatePayload(createTicketSchema, req.body)
     const organizationId = req.auth!.organizationId
     
-    const created = await ticketService.createTicket(payload, organizationId)
+    const created = await ticketService.createTicket(payload, organizationId, req.auth?.userId)
     const queued = ticketQueue.enqueue(created.id, organizationId, false)
 
     res.status(202).json({
@@ -24,7 +25,8 @@ export class TicketController {
     const { id } = validatePayload(ticketIdParamSchema, req.params)
     const organizationId = req.auth!.organizationId
     
-    const ticket = await ticketService.getTicketById(id, organizationId)
+    const requesterId = !req.auth!.apiKeyId && !SUPPORT_ROLES.includes(req.auth!.role ?? "") ? req.auth!.userId : undefined
+    const ticket = await ticketService.getTicketById(id, organizationId, requesterId)
     res.status(200).json(ticket)
   }
 

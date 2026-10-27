@@ -1,3 +1,5 @@
+import { supportRouter } from "./modules/support/support.routes.js"
+
 import express from "express"
 import cors from "cors"
 import path from "path"
@@ -26,9 +28,17 @@ export const createApp = () => {
   // Mount the rest of the billing routes (they use express.json since it's above)
   app.use("/billing", billingRouter)
 
+  app.use("/support", supportRouter)
   app.use("/auth", authRoutes)
   app.use("/health", healthRouter)
-  app.use("/tickets", ticketRouter)
+  app.use("/tickets", (req, res, next) => {
+    // The browser and API share ticket URLs. Serve the SPA on document navigation.
+    if (env.NODE_ENV === "production" && req.method === "GET" && req.headers.accept?.includes("text/html")) {
+      next()
+      return
+    }
+    ticketRouter(req, res, next)
+  })
 
   if (env.NODE_ENV === "production") {
     const __filename = fileURLToPath(import.meta.url)

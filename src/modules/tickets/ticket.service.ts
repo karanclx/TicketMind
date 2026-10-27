@@ -1,3 +1,8 @@
+import { handoffDecision } from "../support/support-policy.js"
+
+import { resetMonthlyUsage } from "./usage-cycle.js"
+import { env } from "../../config/env.js"
+
 import { Types } from "mongoose"
 
 import { NotFoundError } from "../../lib/errors.js"
@@ -9,7 +14,7 @@ import { OrganizationModel } from "../../models/Organization.js"
 import type { CreateTicketInput } from "./ticket.schemas.js"
 
 export class TicketService {
-  public async createTicket(input: CreateTicketInput, organizationId: string): Promise<{ id: string }> {
+  public async createTicket(input: CreateTicketInput, organizationId: string, createdBy?: string): Promise<{ id: string }> {
     const normalizedTitle = input.title.trim()
     const normalizedDescription = input.description.trim()
 
@@ -21,6 +26,7 @@ export class TicketService {
         userRole: input.user_role,
         timestamp: new Date(input.timestamp)
       },
+      ...(createdBy ? { createdBy: new Types.ObjectId(createdBy) } : {}),
       normalizedTitle,
       normalizedDescription,
       status: "pending"
@@ -29,8 +35,8 @@ export class TicketService {
     return { id: ticket._id.toString() }
   }
 
-  public async getTicketById(id: string, organizationId: string): Promise<Record<string, unknown>> {
-    const ticket = await SupportTicketModel.findOne({ _id: id, organizationId }).lean()
+  public async getTicketById(id: string, organizationId: string, requesterId?: string): Promise<Record<string, unknown>> {
+    const ticket = await SupportTicketModel.findOne({ _id: id, organizationId, ...(requesterId ? { createdBy: requesterId } : {}) }).lean()
 
     if (!ticket) {
       throw new NotFoundError("Ticket not found")
@@ -48,6 +54,16 @@ export class TicketService {
     return {
       id: ticket._id.toString(),
       status: ticket.status,
+      created_by: ticket.createdBy?.toString() ?? null,
+      workflow: {
+        status: ticket.workflowStatus ?? (["processed", "failed"].includes(ticket.status) ? "needs_human" : "awaiting_ai"),
+        team: ticket.assignedTeam ?? "IT Helpdesk",
+        assignee_id: ticket.assignedTo?.toString() ?? null,
+        reason: ticket.handoffReason ?? "",
+        revision: ticket.handoffRevision ?? 0,
+        resolution_note: ticket.resolutionNote ?? "",
+        resolved_at: ticket.resolvedAt ?? null
+      },
       created_at: ticket.createdAt,
       updated_at: ticket.updatedAt,
       raw_input: {
@@ -100,13 +116,17 @@ export class TicketService {
          throw new NotFoundError("Organization not found")
       }
 
+      if (resetMonthlyUsage(organization)) {
+        await organization.save()
+      }
+
       const startedAt = performance.now()
       let aiOutputResult
       let provider = "llm-pipeline-v1"
       let model = "three-step-or-fallback"
       
       const isOverQuota = organization.ticketsProcessedThisCycle >= organization.monthlyTicketQuota
-      const isSubscriptionInvalid = ["past_due", "canceled"].includes(organization.subscriptionStatus)
+      const isSubscriptionInvalid = ["past_due", "canceled", "unpaid", "incomplete", "incomplete_expired", "paused"].includes(organization.subscriptionStatus)
 
       if (isOverQuota || isSubscriptionInvalid) {
         // Over quota or unpaid: skip LLM pipeline, fall back to deterministic analyzer directly
@@ -127,6 +147,9 @@ export class TicketService {
           timestamp: rawInput.timestamp.toISOString()
         })
         aiOutputResult = pipelineResult.result
+        const usedFallback = Object.values(pipelineResult.trace).includes("fallback")
+        provider = usedFallback ? "deterministic-fallback" : env.LLM_PROVIDER
+        model = usedFallback ? "keyword-analyzer" : env.LLM_PROVIDER === "mock" ? "mock-stub" : env.LLM_MODEL
         
         organization.ticketsProcessedThisCycle += 1
         await organization.save()
@@ -149,9 +172,18 @@ export class TicketService {
       ticket.lastProcessedAt = new Date()
       ticket.status = "processed"
       await ticket.save()
+      // Only initialize a handoff once. Never overwrite work already claimed or resolved by a human.
+      await SupportTicketModel.updateOne({
+        _id: id, organizationId,
+        $or: [{ workflowStatus: "awaiting_ai" }, { workflowStatus: { $exists: false } }]
+      }, { $set: handoffDecision(aiOutputResult, provider), $inc: { handoffRevision: 1 } })
     } catch (error) {
       ticket.status = "failed"
       await ticket.save()
+      await SupportTicketModel.updateOne({
+        _id: id, organizationId,
+        $or: [{ workflowStatus: "awaiting_ai" }, { workflowStatus: { $exists: false } }]
+      }, { $set: { workflowStatus: "needs_human", assignedTeam: "IT Helpdesk", handoffReason: "Automatic processing failed; support staff review required." }, $inc: { handoffRevision: 1 } })
       throw error
     }
   }

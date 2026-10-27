@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import request from "supertest"
-import express from "express"
+import type { Request, Response } from "express"
 
-import { healthRouter } from "../modules/health/health.routes.js"
 import { ticketQueue } from "../modules/tickets/ticket.module.js"
 
 import { healthController } from "../modules/health/health.controller.js"
@@ -21,14 +19,14 @@ describe("Health API Isolation", () => {
     const req = {
       auth: { organizationId: "org-a" },
       query: {}
-    } as any
+    } as unknown as Request
 
     const res = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn()
-    } as any
+    }
 
-    await healthController.getHealth(req, res)
+    await healthController.getHealth(req, res as unknown as Response)
     
     expect(res.status).toHaveBeenCalledWith(200)
     

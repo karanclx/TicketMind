@@ -6,6 +6,9 @@ services:
     container_name: ticketmind-api
     env_file:
       - .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/ticketmind
+      APP_URL: http://localhost:3000
     ports:
       - "3000:3000"
     depends_on:
@@ -13,7 +16,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test:
-        ["CMD", "node", "-e", "http.get('http://localhost:3000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+        ["CMD", "node", "-e", "http.get('http://localhost:3000/health/live', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

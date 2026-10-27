@@ -2,7 +2,9 @@ import { ZodError, type ZodSchema } from "zod"
 
 import type { IncomingTicket } from "../../ticket-intelligence/types.js"
 import { fallbackAnalyze } from "./fallback.js"
-import { defaultLlmClient, promptFactory } from "./default-llm-client.js"
+import { env } from "../../config/env.js"
+import { configuredLlmClient } from "./configured-llm-client.js"
+import { promptFactory } from "./default-llm-client.js"
 import type { LlmClient } from "./llm-client.js"
 import {
   classificationSchema,
@@ -14,11 +16,11 @@ import {
 } from "./schemas.js"
 import type { AiPipelineResult, PipelineStepStatus } from "./types.js"
 
-const MAX_RETRIES = 2
+const MAX_RETRIES = env.LLM_MAX_RETRIES
 const CONFIDENCE_MIN = 0.75
 
 export class AiPipelineService {
-  constructor(private readonly llmClient: LlmClient = defaultLlmClient) {}
+  constructor(private readonly llmClient: LlmClient = configuredLlmClient) {}
 
   public async processTicket(ticket: IncomingTicket): Promise<AiPipelineResult> {
     let extractionStatus: PipelineStepStatus = "success"

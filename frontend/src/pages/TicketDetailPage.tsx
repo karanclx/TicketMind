@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 
 import { getTicketById, triggerReprocess } from "../api"
+import { Icon } from "../components/ui/icon"
+import { useAuth } from "../auth"
+import { HandoffPanel } from "../components/HandoffPanel"
 import { AiResultCard } from "../components/AiResultCard"
 import { TicketStatusBadge } from "../components/TicketStatusBadge"
 import type { TicketDetail } from "../types"
@@ -9,6 +12,8 @@ import type { TicketDetail } from "../types"
 const POLL_INTERVAL_MS = 2000
 
 export const TicketDetailPage = () => {
+  const { user } = useAuth()
+  const staff = ["owner", "admin", "agent"].includes(user?.role)
   const { id } = useParams<{ id: string }>()
   const [ticket, setTicket] = useState<TicketDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -41,13 +46,13 @@ export const TicketDetailPage = () => {
   }, [id])
 
   useEffect(() => {
-    if (!shouldPoll) {
+    if (!id) {
       return
     }
 
     const timer = window.setInterval(() => {
       void load()
-    }, POLL_INTERVAL_MS)
+    }, shouldPoll ? POLL_INTERVAL_MS : 10000)
 
     return () => {
       window.clearInterval(timer)
@@ -72,13 +77,13 @@ export const TicketDetailPage = () => {
   }
 
   if (isLoading) {
-    return <div className="panel">Loading ticket...</div>
+    return <div className="panel loading-state" role="status"><span className="loader" />Loading ticket…</div>
   }
 
   if (error) {
     return (
       <div className="panel">
-        <p className="error">{error}</p>
+        <p className="error" role="alert">{error}</p>
         <Link to="/">Back</Link>
       </div>
     )
@@ -94,16 +99,18 @@ export const TicketDetailPage = () => {
   }
 
   return (
-    <div className="stack">
-      <section className="panel">
+    <div className="stack page-enter">
+      <Link className="back-link" to={staff ? "/queue" : "/my-tickets"}><Icon name="back" />{staff ? "Back to support queue" : "Back to my tickets"}</Link>
+      <section className="panel ticket-overview">
+        <div className="eyebrow">SUPPORT REQUEST <span className="ticket-id">#{id?.slice(-8).toUpperCase()}</span></div>
         <div className="row row-space">
-          <h2>{ticket.raw_input.title}</h2>
+          <h1>{ticket.raw_input.title}</h1>
           <TicketStatusBadge status={ticket.status} />
         </div>
 
-        <p>{ticket.raw_input.description}</p>
+        <p className="reading-text ticket-description">{ticket.raw_input.description}</p>
 
-        <div className="meta">
+        <div className="meta ticket-meta">
           <span>
             <strong>User role:</strong> {ticket.raw_input.user_role}
           </span>
@@ -112,14 +119,15 @@ export const TicketDetailPage = () => {
           </span>
         </div>
 
-        <div className="row">
-          <button onClick={() => void onReprocess()} disabled={isReprocessing}>
-            {isReprocessing ? "Reprocessing..." : "Reprocess"}
-          </button>
-          <Link to="/">New Ticket</Link>
+        <div className="row ticket-actions">
+          {staff && <button className="button-secondary" onClick={() => void onReprocess()} disabled={isReprocessing || shouldPoll}>
+            <Icon name="refresh" />{isReprocessing ? "Reprocessing…" : "Reprocess"}
+          </button>}
+          <Link className="button-ghost" to="/new"><Icon name="plus" />New ticket</Link>
         </div>
       </section>
 
+      <HandoffPanel ticket={ticket} onUpdate={load} />
       <AiResultCard ai={ticket.ai} />
     </div>
   )

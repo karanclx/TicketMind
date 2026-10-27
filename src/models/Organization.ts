@@ -1,3 +1,5 @@
+import { nextUsageReset } from "../modules/tickets/usage-cycle.js"
+
 import { Schema, model, type InferSchemaType, type Model, Types } from "mongoose"
 
 export type Plan = "trial" | "starter" | "growth"
@@ -10,12 +12,13 @@ export const PLAN_QUOTAS: Record<Plan, number> = {
 
 const organizationSchema = new Schema(
   {
+    requesterInviteHash: { type: String, select: false, index: true },
     name: { type: String, required: true },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
     plan: { type: String, enum: ["trial", "starter", "growth"], default: "trial" },
     monthlyTicketQuota: { type: Number, default: PLAN_QUOTAS["trial"] },
     ticketsProcessedThisCycle: { type: Number, default: 0 },
-    cycleResetAt: { type: Date, required: false },
+    cycleResetAt: { type: Date, default: () => nextUsageReset() },
     stripeCustomerId: { type: String, required: false, index: true },
     stripeSubscriptionId: { type: String, required: false },
     subscriptionStatus: { 

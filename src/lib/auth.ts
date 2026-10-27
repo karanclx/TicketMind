@@ -25,7 +25,7 @@ export function verifySessionToken(token: string): SessionPayload | null {
   try {
     const decoded = jwt.verify(token, env.SESSION_SECRET) as SessionPayload
     return decoded
-  } catch (error) {
+  } catch {
     return null
   }
 }

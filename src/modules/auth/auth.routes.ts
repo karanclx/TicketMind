@@ -5,6 +5,7 @@ import { requireAuth } from "../../middleware/require-auth.js"
 
 export const authRoutes = Router()
 
+authRoutes.post("/workspace", asyncHandler(authController.createWorkspace))
 authRoutes.post("/signup", asyncHandler(authController.signup))
 authRoutes.post("/login", asyncHandler(authController.login))
 authRoutes.post("/logout", asyncHandler(authController.logout))

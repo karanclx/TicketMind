@@ -5,7 +5,7 @@ const userSchema = new Schema(
     organizationId: { type: Schema.Types.ObjectId, ref: "Organization", required: true, index: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true, select: false },
-    role: { type: String, enum: ["owner", "admin", "member"], default: "member" },
+    role: { type: String, enum: ["owner", "admin", "agent", "member"], default: "member" },
     lastLoginAt: { type: Date, required: false }
   },
   {

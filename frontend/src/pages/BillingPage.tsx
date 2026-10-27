@@ -46,11 +46,11 @@ export const BillingPage = () => {
   // Wait, the API GET /auth/me populates organizationId so user.organizationId is the object.
 
   return (
-    <div className="container">
-      <h1>Billing & Subscription</h1>
-      {error && <div className="error-message">{error}</div>}
+    <div className="container billing-page page-enter">
+      <div className="eyebrow">WORKSPACE SETTINGS</div><h1>Plan & usage</h1><p className="muted">Keep track of your workspace’s ticket allowance.</p>
+      {error && <div className="error" role="alert">{error}</div>}
 
-      <div className="card">
+      <div className="panel billing-card">
         <h2>Current Plan: {org.plan || "trial"}</h2>
         <p>Status: {org.subscriptionStatus}</p>
         <p>
@@ -60,15 +60,15 @@ export const BillingPage = () => {
 
       <div style={{ marginTop: "2rem" }}>
         {org.stripeSubscriptionId ? (
-          <button onClick={handlePortal} disabled={loading} className="btn btn-primary">
+          <button onClick={handlePortal} disabled={loading} className="button-primary">
             Manage Subscription
           </button>
         ) : (
           <div style={{ display: "flex", gap: "1rem" }}>
-            <button onClick={() => handleCheckout("starter")} disabled={loading} className="btn btn-primary">
+            <button onClick={() => handleCheckout("starter")} disabled={loading} className="button-primary">
               Upgrade to Starter
             </button>
-            <button onClick={() => handleCheckout("growth")} disabled={loading} className="btn btn-primary">
+            <button onClick={() => handleCheckout("growth")} disabled={loading} className="button-primary">
               Upgrade to Growth
             </button>
           </div>

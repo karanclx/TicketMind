@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Icon } from "./ui/icon"
 
 import type { TicketRequest } from "../types"
 
@@ -9,7 +10,7 @@ type TicketFormProps = {
 export const TicketForm = ({ onSubmit }: TicketFormProps) => {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [userRole, setUserRole] = useState<TicketRequest["user_role"]>("employee")
+  const [userRole, setUserRole] = useState<TicketRequest["user_role"]>("student")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,8 +21,8 @@ export const TicketForm = ({ onSubmit }: TicketFormProps) => {
 
     try {
       await onSubmit({
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         user_role: userRole,
         timestamp: new Date().toISOString()
       })
@@ -33,46 +34,46 @@ export const TicketForm = ({ onSubmit }: TicketFormProps) => {
   }
 
   return (
-    <form className="panel" onSubmit={handleSubmit}>
-      <h2>Submit a ticket</h2>
+    <form className="panel ticket-form" onSubmit={handleSubmit}>
+      <div className="form-heading"><span className="icon-tile"><Icon name="ticket" /></span><div><h2>Create a ticket</h2><p>Let’s get to the root of it.</p></div><span className="small-label">NEW REQUEST</span></div>
 
       <label className="field">
-        <span>Title</span>
+        <span>Issue title <span className="required">*</span></span>
         <input
           required
           maxLength={300}
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="Short issue summary"
+          placeholder="e.g. Unable to connect to campus Wi-Fi"
         />
       </label>
 
       <label className="field">
-        <span>Description</span>
+        <span>What’s happening? <span className="required">*</span></span>
         <textarea
           required
           maxLength={10000}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          placeholder="Include symptoms, errors, and impact"
-          rows={7}
+          placeholder="Describe the problem, any error messages, and who’s affected. What have you already tried?"
+          rows={6}
         />
       </label>
 
       <label className="field">
-        <span>User role</span>
+        <span>Who is reporting the issue?</span>
         <select value={userRole} onChange={(event) => setUserRole(event.target.value as TicketRequest["user_role"])}>
-          <option value="student">student</option>
-          <option value="employee">employee</option>
-          <option value="admin">admin</option>
+          <option value="student">Student</option>
+          <option value="employee">Employee</option>
+          <option value="admin">Administrator</option>
         </select>
       </label>
 
-      {error ? <p className="error">{error}</p> : null}
+      {error ? <p className="error" role="alert">{error}</p> : null}
 
-      <button disabled={isSubmitting} type="submit">
-        {isSubmitting ? "Submitting..." : "Submit Ticket"}
-      </button>
+      <div className="form-footer"><span><Icon name="shield" width="14" height="14" /> Shared within your workspace</span><button className="button-primary glow-button" disabled={isSubmitting || !title.trim() || !description.trim()} type="submit">
+        {isSubmitting ? "Submitting…" : "Analyze ticket"}<Icon name="arrow" />
+      </button></div>
     </form>
   )
 }

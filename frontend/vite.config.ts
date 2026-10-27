@@ -7,7 +7,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/tickets": "http://localhost:3000",
+      "/support": "http://localhost:3000",
+      "/auth": "http://localhost:3000",
+      "/billing": { target: "http://localhost:3000", bypass: (req) => req.headers.accept?.includes("text/html") ? req.url : undefined },
+      "/tickets": { target: "http://localhost:3000", bypass: (req) => req.headers.accept?.includes("text/html") ? req.url : undefined },
       "/health": "http://localhost:3000"
     }
   },

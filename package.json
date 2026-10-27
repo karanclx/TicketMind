@@ -10,13 +10,14 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "frontend:build": "vite build --config frontend/vite.config.ts",
+    "frontend:build": "tsc -p frontend/tsconfig.json && vite build --config frontend/vite.config.ts",
     "frontend:dev": "vite --config frontend/vite.config.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p frontend/tsconfig.json",
     "lint": "eslint .",
-    "test": "SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest run",
-    "test:watch": "SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest",
-    "test:one": "SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest run --testNamePattern"
+    "test": "LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest run",
+    "test:watch": "LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest",
+    "test:one": "LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest run --testNamePattern",
+    "start": "node dist/server.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

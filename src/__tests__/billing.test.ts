@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import express from "express"
+import express, { type Request, type Response, type NextFunction } from "express"
+import type { HydratedDocument } from "mongoose"
+import type { Organization } from "../models/Organization.js"
 import request from "supertest"
 import { Types } from "mongoose"
 
@@ -15,7 +17,7 @@ vi.mock("../lib/stripe.js", () => ({
 }))
 
 vi.mock("../middleware/require-auth.js", () => ({
-  requireAuth: (req: any, res: any, next: any) => next()
+  requireAuth: (_req: Request, _res: Response, next: NextFunction) => next()
 }))
 
 import { billingRouter } from "../modules/billing/billing.routes.js"
@@ -44,7 +46,7 @@ describe("Billing", () => {
         name: "Test Org",
         stripeCustomerId: null,
         save: vi.fn().mockResolvedValue(true)
-      } as any)
+      } as unknown as HydratedDocument<Organization>)
 
       mockStripe.customers.create.mockResolvedValue({ id: "cus_123" })
       mockStripe.checkout.sessions.create.mockResolvedValue({ url: "http://checkout.stripe.com/123" })
@@ -97,7 +99,7 @@ describe("Billing", () => {
         monthlyTicketQuota: 50,
         save: vi.fn().mockResolvedValue(true)
       }
-      vi.spyOn(OrganizationModel, "findOne").mockResolvedValue(mockOrg as any)
+      vi.spyOn(OrganizationModel, "findOne").mockResolvedValue(mockOrg as unknown as HydratedDocument<Organization>)
 
       mockStripe.webhooks.constructEvent.mockReturnValue({
         type: "customer.subscription.updated",
@@ -121,6 +123,7 @@ describe("Billing", () => {
       const sendWebhook = () => request(app)
         .post("/billing/webhook")
         .set("stripe-signature", "fake-sig")
+        .set("Content-Type", "application/json")
         .send(JSON.stringify({ fake: true }))
 
       const res1 = await sendWebhook()
@@ -155,7 +158,7 @@ describe("Billing", () => {
         monthlyTicketQuota: 500,
         save: vi.fn().mockResolvedValue(true)
       }
-      vi.spyOn(OrganizationModel, "findOne").mockResolvedValue(mockOrg as any)
+      vi.spyOn(OrganizationModel, "findOne").mockResolvedValue(mockOrg as unknown as HydratedDocument<Organization>)
 
       mockStripe.webhooks.constructEvent.mockReturnValue({
         type: "customer.subscription.deleted",
@@ -178,6 +181,7 @@ describe("Billing", () => {
       const res = await request(app)
         .post("/billing/webhook")
         .set("stripe-signature", "fake-sig")
+        .set("Content-Type", "application/json")
         .send(JSON.stringify({ fake: true }))
 
       expect(res.status).toBe(200)

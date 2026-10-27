@@ -3,7 +3,6 @@ import { asyncHandler } from "../../lib/async-handler.js"
 import { billingController } from "./billing.controller.js"
 import { requireAuth } from "../../middleware/require-auth.js"
 import { requireRole } from "../../middleware/require-role.js"
-import express from "express"
 
 export const billingRouter = Router()
 

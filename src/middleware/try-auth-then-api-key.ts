@@ -5,8 +5,8 @@ import { ApiKeyModel } from "../models/ApiKey.js"
 
 export const tryAuthThenApiKey = async (req: Request, res: Response, next: NextFunction) => {
   // 1. Try session first
-  const token = req.cookies?.["session"]
-  if (token) {
+  const token: unknown = (req.cookies as Record<string, unknown> | undefined)?.["session"]
+  if (typeof token === "string" && token) {
     const payload = verifySessionToken(token)
     if (payload) {
       req.auth = payload

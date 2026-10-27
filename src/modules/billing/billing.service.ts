@@ -1,3 +1,4 @@
+import { z } from "zod"
 import Stripe from "stripe"
 import { stripe } from "../../lib/stripe.js"
 import { env } from "../../config/env.js"
@@ -37,8 +38,8 @@ export class BillingService {
         }
       ],
       // We will redirect to frontend routes /billing/success and /billing/cancel
-      success_url: `http://localhost:${env.PORT}/billing/success`,
-      cancel_url: `http://localhost:${env.PORT}/billing/cancel`,
+      success_url: `${env.APP_URL}/billing/success`,
+      cancel_url: `${env.APP_URL}/billing/cancel`,
       metadata: {
         organizationId: organization._id.toString(),
         plan
@@ -64,7 +65,7 @@ export class BillingService {
 
     const session = await stripe.billingPortal.sessions.create({
       customer: organization.stripeCustomerId,
-      return_url: `http://localhost:${env.PORT}/`
+      return_url: `${env.APP_URL}/`
     })
 
     return session.url
@@ -81,7 +82,7 @@ export class BillingService {
 
     switch (event.type) {
       case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session
+        const session = event.data.object
         if (session.mode === "subscription" && session.subscription) {
           const organizationId = session.metadata?.["organizationId"]
           if (organizationId) {
@@ -95,14 +96,15 @@ export class BillingService {
         break
       }
       
+      case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const subscription = event.data.object as Stripe.Subscription
+        const subscription = event.data.object
         await this.syncSubscriptionToOrg(subscription)
         break
       }
 
       case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription
+        const subscription = event.data.object
         await this.syncSubscriptionToOrg(subscription)
         break
       }
@@ -138,7 +140,7 @@ export class BillingService {
       plan = "trial"
     }
 
-    const quota = PLAN_QUOTAS[plan as "trial" | "starter" | "growth"] ?? PLAN_QUOTAS["trial"]
+    const quota = PLAN_QUOTAS[plan] ?? PLAN_QUOTAS["trial"]
 
     // Fetch the correct period end (Basil version 2025-03-31+)
     const currentPeriodEnd = firstItem?.current_period_end
@@ -146,7 +148,7 @@ export class BillingService {
     // Update organization safely. Stripe can redeliver these events.
     // The operation is fully idempotent: if we receive identical state, we simply overwrite it.
     org.stripeSubscriptionId = subscription.id
-    org.subscriptionStatus = subscription.status as any
+    org.subscriptionStatus = z.enum(["trialing", "active", "past_due", "canceled", "unpaid", "incomplete", "incomplete_expired", "paused"]).parse(subscription.status)
     if (currentPeriodEnd) {
       org.currentPeriodEnd = new Date(currentPeriodEnd * 1000)
     }

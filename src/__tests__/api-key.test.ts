@@ -29,7 +29,6 @@ vi.mock("../models/SupportTicket.js", () => ({
 
 // Must import app logic after mocks
 import { ticketRouter } from "../modules/tickets/ticket.routes.js"
-import crypto from "crypto"
 
 import { errorHandler } from "../middleware/error-handler.js"
 import { notFoundHandler } from "../middleware/not-found.js"

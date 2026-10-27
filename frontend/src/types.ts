@@ -12,6 +12,8 @@ export type TicketCreateResponse = {
 }
 
 export type TicketDetail = {
+  created_by: string | null
+  workflow: TicketWorkflow
   id: string
   status: "pending" | "processing" | "processed" | "failed"
   created_at: string
@@ -41,4 +43,25 @@ export type TicketDetail = {
     }
     processed_at: string
   }
+}
+
+export type WorkflowStatus = "awaiting_ai" | "awaiting_confirmation" | "needs_human" | "in_progress" | "resolved"
+export type TicketWorkflow = {
+  status: WorkflowStatus
+  team: string
+  assignee_id: string | null
+  reason: string
+  revision: number
+  resolution_note: string
+  resolved_at: string | null
+}
+export type SupportAgent = { id: string; email: string; role: string }
+export type QueueTicket = {
+  id: string; title: string; processing_status: string; status: WorkflowStatus
+  team: string; assignee_id: string | null; category: string; priority: string; created_at: string
+}
+export type QueueResponse = { tickets: QueueTicket[]; total: number; page: number; page_size: number }
+export type HandoffUpdate = {
+  action: "request_human" | "confirm_fixed" | "assign" | "start" | "resolve" | "reopen"
+  expected_revision: number; team?: string; assignee_id?: string | null; note?: string
 }

@@ -1,11 +1,11 @@
 import type { Request, Response } from "express"
 import { authService } from "./auth.service.js"
-import { signupSchema, loginSchema } from "./auth.schemas.js"
+import { signupSchema, loginSchema, requesterSignupSchema } from "./auth.schemas.js"
 import { signSessionToken } from "../../lib/auth.js"
 import { env } from "../../config/env.js"
 
 export class AuthController {
-  signup = async (req: Request, res: Response) => {
+  createWorkspace = async (req: Request, res: Response) => {
     const input = signupSchema.parse(req.body)
     const payload = await authService.signup(input)
     
@@ -19,6 +19,14 @@ export class AuthController {
     })
 
     res.status(201).json({ message: "Signup successful" })
+  }
+
+  signup = async (req: Request, res: Response) => {
+    const payload = await authService.joinAsRequester(requesterSignupSchema.parse(req.body))
+    res.cookie("session", signSessionToken(payload), {
+      httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "lax", maxAge: 7 * 24 * 60 * 60 * 1000
+    })
+    res.status(201).json({ message: "Requester account created" })
   }
 
   login = async (req: Request, res: Response) => {

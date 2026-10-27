@@ -17,13 +17,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchMe = async () => {
+  const fetchMe = async (required = false) => {
     try {
       const data = await getMe()
       setUser(data.user)
       setError(null)
-    } catch {
+    } catch (err) {
       setUser(null)
+      if (required) throw err
     } finally {
       setLoading(false)
     }
@@ -35,12 +36,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const handleLogin = async (payload: any) => {
     await login(payload)
-    await fetchMe()
+    await fetchMe(true)
   }
 
   const handleSignup = async (payload: any) => {
     await signup(payload)
-    await fetchMe()
+    await fetchMe(true)
   }
 
   const handleLogout = async () => {

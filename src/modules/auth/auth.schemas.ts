@@ -14,3 +14,10 @@ export const loginSchema = z.object({
 })
 
 export type LoginInput = z.infer<typeof loginSchema>
+
+export const requesterSignupSchema = z.object({
+  invite: z.string().regex(/^[a-f0-9]{48}$/, "A valid requester signup code is required"),
+  email: z.string().trim().email().toLowerCase(),
+  password: z.string().min(8).max(128)
+}).strict()
+export type RequesterSignupInput = z.infer<typeof requesterSignupSchema>

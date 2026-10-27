@@ -40,4 +40,11 @@ describe("Tenant Isolation", () => {
     await expect(service.processTicketById(new Types.ObjectId().toString(), false, "org-b"))
       .rejects.toThrowError(NotFoundError)
   })
+  it("scopes requester reads to their own tickets even inside the same organization", async () => {
+    findOneTicket.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) })
+    const id = new Types.ObjectId().toString()
+    await expect(new TicketService().getTicketById(id, "org-a", "requester-a")).rejects.toThrowError(NotFoundError)
+    expect(findOneTicket).toHaveBeenCalledWith({ _id: id, organizationId: "org-a", createdBy: "requester-a" })
+  })
+
 })

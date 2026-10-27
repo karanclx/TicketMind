@@ -24,11 +24,12 @@ export const login = async (payload: any): Promise<void> => {
 }
 
 export const signup = async (payload: any): Promise<void> => {
-  const response = await fetch("/auth/signup", {
+  const { accountType, ...body } = payload
+  const response = await fetch(accountType === "workspace" ? "/auth/workspace" : "/auth/signup", {
     ...defaultOptions,
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(body)
   })
   if (!response.ok) throw new Error(await parseError(response))
 }
@@ -84,3 +85,21 @@ export const triggerReprocess = async (id: string): Promise<TicketCreateResponse
 
   return (await response.json()) as TicketCreateResponse
 }
+
+async function supportRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(url, { ...defaultOptions, ...options })
+  if (!response.ok) throw new Error(await parseError(response))
+  return await response.json() as T
+}
+
+export const listSupportTickets = (query: URLSearchParams) => supportRequest<import("./types").QueueResponse>(`/support/tickets?${query}`)
+export const getSupportAgents = () => supportRequest<{ agents: import("./types").SupportAgent[]; teams: string[] }>("/support/agents")
+export const updateHandoff = (id: string, payload: import("./types").HandoffUpdate) => supportRequest<{ success: boolean }>(`/tickets/${id}/handoff`, {
+  method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+})
+export const addSupportAgent = (payload: { email: string; password: string }) => supportRequest<import("./types").SupportAgent>("/support/agents", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+})
+
+export const createRequesterInvite = () => supportRequest<{ invite: string }>("/support/requester-invite", { method: "POST" })
+export const getMyTickets = (page: number) => supportRequest<{ tickets: { id: string; title: string; status: import("./types").WorkflowStatus; team: string; created_at: string }[]; total: number; page: number; page_size: number }>(`/tickets/mine?page=${page}`)

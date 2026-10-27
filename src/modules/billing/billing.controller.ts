@@ -18,14 +18,18 @@ export class BillingController {
 
   public async handleWebhook(req: Request, res: Response) {
     const signature = req.headers["stripe-signature"]
-    if (!signature) {
+    if (typeof signature !== "string") {
       res.status(400).send("Missing Stripe signature")
       return
     }
 
     try {
-      // req.body must be the raw Buffer
-      await billingService.handleWebhook(signature as string, req.body)
+      const body: unknown = req.body
+      if (!Buffer.isBuffer(body)) {
+        res.status(400).send("Expected raw webhook body")
+        return
+      }
+      await billingService.handleWebhook(signature, body)
       res.status(200).send({ received: true })
     } catch (error: unknown) {
       logger.error({ error }, "Stripe webhook failed")
