@@ -1,4 +1,5 @@
 export type TicketRequest = {
+  images?: { name: string; base64: string }[]
   title: string
   description: string
   user_role: "student" | "employee" | "admin"
@@ -12,6 +13,7 @@ export type TicketCreateResponse = {
 }
 
 export type TicketDetail = {
+  images?: { id: string; name: string; url: string; status: "pending" | "low_signal" | "inconclusive" | "review_required" | "unavailable"; score: number | null; model: string; checked_at: string | null }[]
   created_by: string | null
   workflow: TicketWorkflow
   id: string

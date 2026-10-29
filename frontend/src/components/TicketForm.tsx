@@ -8,6 +8,7 @@ type TicketFormProps = {
 }
 
 export const TicketForm = ({ onSubmit }: TicketFormProps) => {
+  const [files, setFiles] = useState<File[]>([])
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [userRole, setUserRole] = useState<TicketRequest["user_role"]>("student")
@@ -20,7 +21,15 @@ export const TicketForm = ({ onSubmit }: TicketFormProps) => {
     setIsSubmitting(true)
 
     try {
+      if (files.length > 2 || files.some(file => file.size > 4 * 1024 * 1024)) throw new Error("Choose up to two images, at most 4 MB each")
+      const images = await Promise.all(files.map(file => new Promise<{ name: string; base64: string }>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve({ name: file.name.slice(0, 150), base64: String(reader.result).split(",")[1] ?? "" })
+        reader.onerror = () => reject(new Error("Could not read image"))
+        reader.readAsDataURL(file)
+      })))
       await onSubmit({
+        images,
         title: title.trim(),
         description: description.trim(),
         user_role: userRole,
@@ -69,6 +78,13 @@ export const TicketForm = ({ onSubmit }: TicketFormProps) => {
         </select>
       </label>
 
+      <label className="field">
+        <span>Image evidence <span className="small-label">OPTIONAL</span></span>
+        <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={isSubmitting}
+          onChange={event => setFiles(Array.from(event.target.files ?? []))} aria-describedby="image-help" />
+        <small id="image-help">Up to two JPEG, PNG or WebP images, 4 MB each, at least 224px per side. Images are sent to Sightengine for synthetic-content screening; results may require support review.</small>
+        {files.length > 0 && <small>{files.map(file => file.name).join(" · ")}</small>}
+      </label>
       {error ? <p className="error" role="alert">{error}</p> : null}
 
       <div className="form-footer"><span><Icon name="shield" width="14" height="14" /> Shared within your workspace</span><button className="button-primary glow-button" disabled={isSubmitting || !title.trim() || !description.trim()} type="submit">

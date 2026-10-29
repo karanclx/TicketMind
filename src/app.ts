@@ -1,3 +1,5 @@
+import { asyncHandler } from "./lib/async-handler.js"
+import { tryAuthThenApiKey } from "./middleware/try-auth-then-api-key.js"
 import { supportRouter } from "./modules/support/support.routes.js"
 
 import express from "express"
@@ -22,8 +24,10 @@ export const createApp = () => {
   // Mount webhook route BEFORE express.json() so it can use express.raw()
   app.use("/billing/webhook", express.raw({ type: "application/json" }))
 
-  app.use(express.json({ limit: "1mb" }))
   app.use(cookieParser())
+  // Authenticate before accepting the larger, base64 image payload.
+  app.post("/tickets", asyncHandler(tryAuthThenApiKey), express.json({ limit: "12mb" }))
+  app.use(express.json({ limit: "1mb" }))
 
   // Mount the rest of the billing routes (they use express.json since it's above)
   app.use("/billing", billingRouter)
@@ -33,7 +37,7 @@ export const createApp = () => {
   app.use("/health", healthRouter)
   app.use("/tickets", (req, res, next) => {
     // The browser and API share ticket URLs. Serve the SPA on document navigation.
-    if (env.NODE_ENV === "production" && req.method === "GET" && req.headers.accept?.includes("text/html")) {
+    if (env.NODE_ENV === "production" && req.method === "GET" && !req.path.includes("/images/") && req.headers.accept?.includes("text/html")) {
       next()
       return
     }

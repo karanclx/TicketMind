@@ -1,3 +1,4 @@
+import { EvidencePanel } from "../components/EvidencePanel"
 import { useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 
@@ -127,6 +128,7 @@ export const TicketDetailPage = () => {
         </div>
       </section>
 
+      <EvidencePanel ticket={ticket} />
       <HandoffPanel ticket={ticket} onUpdate={load} />
       <AiResultCard ai={ticket.ai} />
     </div>

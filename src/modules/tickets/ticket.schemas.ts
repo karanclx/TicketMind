@@ -1,6 +1,8 @@
+import { imageInputSchema } from "../evidence/evidence.service.js"
 import { z } from "zod"
 
 export const createTicketSchema = z.object({
+  images: z.array(imageInputSchema).max(2).optional(),
   title: z.string().min(1).max(300),
   description: z.string().min(1).max(10000),
   user_role: z.enum(["student", "employee", "admin"]),

@@ -257,3 +257,7 @@ An admin generates a link with **Invite requesters** on the queue page. Its rand
 The server assigns requester roles itself and rejects extra role/organization fields. A separate `POST /auth/workspace` endpoint handles administrator setup. `POST /auth/signup` now requires `invite`, `email`, and `password`; it no longer creates workspaces. `GET /tickets/mine` lists only the signed-in user's tickets with pagination. `POST /support/requester-invite` is owner/admin-only.
 
 Existing owner accounts and tickets are preserved. To test both sides, keep your owner account in one browser and use the requester signup link with a different email in a private/incognito window. The ticket form's reporter type is context for analysis, not a way to change account permissions.
+
+### Image evidence screening
+
+Tickets can include two private images screened by Sightengine's hosted `genai` model. See [the image screening setup guide](docs/IMAGE_INFERENCE_SETUP.md) for free-account credentials, testing and limitations. No local AI server is required. Screening is advisory and never approves or rejects refunds.

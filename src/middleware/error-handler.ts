@@ -11,6 +11,10 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
+  if (error && typeof error === "object" && "type" in error && error.type === "entity.too.large") {
+    res.status(413).json({ error: "Upload is too large. Use at most two images, each under 4 MB." })
+    return
+  }
   if (error instanceof ZodError) {
     res.status(400).json({ error: "Invalid request", details: error.issues })
     return

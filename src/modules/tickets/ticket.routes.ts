@@ -40,3 +40,15 @@ ticketRouter.patch("/:id/handoff", requireAuth, asyncHandler(async (req, res) =>
   const { id } = ticketIdParamSchema.parse(req.params)
   res.json(await supportService.update(id, req.auth!, handoffSchema.parse(req.body)))
 }))
+
+// Downloads use the same tenant and requester boundary as ticket details.
+ticketRouter.get("/:id/images/:imageId", asyncHandler(tryAuthThenApiKey), asyncHandler(async (req, res) => {
+  const { id } = ticketIdParamSchema.parse(req.params)
+  const imageId = z.string().regex(/^[0-9a-fA-F]{24}$/).parse(req.params["imageId"])
+  const auth = req.auth!
+  const requester = !auth.apiKeyId && !SUPPORT_ROLES.includes(auth.role ?? "")
+  const ticket = await SupportTicketModel.findOne({ _id: id, organizationId: auth.organizationId, ...(requester ? { createdBy: auth.userId } : {}) }).select("+images.data")
+  const image = ticket?.images.find(item => item._id.toString() === imageId)
+  if (!image?.data) throw new AppError("Image not found", 404, "NOT_FOUND")
+  res.set({ "Content-Type": image.mime, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" }).send(image.data)
+}))

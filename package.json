@@ -14,9 +14,9 @@
     "frontend:dev": "vite --config frontend/vite.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p frontend/tsconfig.json",
     "lint": "eslint .",
-    "test": "LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest run",
-    "test:watch": "LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest",
-    "test:one": "LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest run --testNamePattern",
+    "test": "SIGHTENGINE_API_USER= SIGHTENGINE_API_SECRET= LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest run",
+    "test:watch": "SIGHTENGINE_API_USER= SIGHTENGINE_API_SECRET= LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest",
+    "test:one": "SIGHTENGINE_API_USER= SIGHTENGINE_API_SECRET= LLM_PROVIDER=mock LLM_MAX_RETRIES=2 SESSION_SECRET=test-secret STRIPE_SECRET_KEY=sk_test_1 STRIPE_WEBHOOK_SECRET=whsec_1 STRIPE_PRICE_ID_STARTER=price_1 STRIPE_PRICE_ID_GROWTH=price_2 vitest run --testNamePattern",
     "start": "node dist/server.js"
   },
   "dependencies": {
@@ -30,6 +30,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
+    "sharp": "^0.35.5",
     "stripe": "^23.0.0",
     "zod": "^3.23.8"
   },

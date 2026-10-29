@@ -26,6 +26,15 @@ const supportTicketSchema = new Schema(
     resolutionNote: { type: String, default: "" },
     resolvedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     resolvedAt: { type: Date, default: null },
+    images: { type: [new Schema({
+      name: { type: String, required: true },
+      mime: { type: String, required: true },
+      data: { type: Buffer, required: true, select: false },
+      status: { type: String, enum: ["pending", "low_signal", "inconclusive", "review_required", "unavailable"], default: "pending" },
+      score: { type: Number, default: null },
+      detectorModel: { type: String, default: "" },
+      checkedAt: { type: Date, default: null }
+    })], default: [] },
     rawInput: { type: rawInputSchema, required: true },
     normalizedTitle: { type: String, required: true, trim: true },
     normalizedDescription: { type: String, required: true, trim: true },

@@ -1,3 +1,4 @@
+import { prepareImages, analyzeImage } from "../evidence/evidence.service.js"
 import { handoffDecision } from "../support/support-policy.js"
 
 import { resetMonthlyUsage } from "./usage-cycle.js"
@@ -18,7 +19,9 @@ export class TicketService {
     const normalizedTitle = input.title.trim()
     const normalizedDescription = input.description.trim()
 
+    const images = await prepareImages(input.images ?? [])
     const ticket = await SupportTicketModel.create({
+      images,
       organizationId: new Types.ObjectId(organizationId),
       rawInput: {
         title: input.title,
@@ -54,6 +57,11 @@ export class TicketService {
     return {
       id: ticket._id.toString(),
       status: ticket.status,
+      images: (ticket.images ?? []).map(image => ({
+        id: image._id.toString(), name: image.name, status: image.status,
+        score: image.score, model: image.detectorModel, checked_at: image.checkedAt,
+        url: `/tickets/${id}/images/${image._id.toString()}`
+      })),
       created_by: ticket.createdBy?.toString() ?? null,
       workflow: {
         status: ticket.workflowStatus ?? (["processed", "failed"].includes(ticket.status) ? "needs_human" : "awaiting_ai"),
@@ -155,6 +163,15 @@ export class TicketService {
         await organization.save()
       }
       
+      // Load private bytes only while processing, never in ticket JSON responses.
+      if (ticket.images?.length) {
+        const withBytes = await SupportTicketModel.findOne({ _id: id, organizationId }).select("+images.data")
+        for (const image of withBytes?.images ?? []) {
+          const result = image.data ? await analyzeImage(Buffer.from(image.data), image.mime) : { status: "unavailable", score: null, detectorModel: "", checkedAt: new Date() }
+          const target = ticket.images.find(item => item._id.equals(image._id))
+          if (target) Object.assign(target, result)
+        }
+      }
       const processingMs = Math.round(performance.now() - startedAt)
       const nextVersion = ticket.aiVersion + 1
       
@@ -173,10 +190,15 @@ export class TicketService {
       ticket.status = "processed"
       await ticket.save()
       // Only initialize a handoff once. Never overwrite work already claimed or resolved by a human.
+      const decision = handoffDecision(aiOutputResult, provider)
+      if (ticket.images?.some(image => image.status !== "low_signal")) {
+        decision.workflowStatus = "needs_human"
+        decision.handoffReason = "Image evidence needs support review. Screening is inconclusive, flagged, or unavailable; it is not a fraud verdict."
+      }
       await SupportTicketModel.updateOne({
         _id: id, organizationId,
-        $or: [{ workflowStatus: "awaiting_ai" }, { workflowStatus: { $exists: false } }]
-      }, { $set: handoffDecision(aiOutputResult, provider), $inc: { handoffRevision: 1 } })
+        $or: [{ workflowStatus: "awaiting_ai" }, { workflowStatus: { $exists: false } }, ...(ticket.images?.some(image => image.status !== "low_signal") ? [{ workflowStatus: "awaiting_confirmation" }] : [])]
+      }, { $set: decision, $inc: { handoffRevision: 1 } })
     } catch (error) {
       ticket.status = "failed"
       await ticket.save()
