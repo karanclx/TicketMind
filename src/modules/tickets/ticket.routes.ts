@@ -52,3 +52,10 @@ ticketRouter.get("/:id/images/:imageId", asyncHandler(tryAuthThenApiKey), asyncH
   if (!image?.data) throw new AppError("Image not found", 404, "NOT_FOUND")
   res.set({ "Content-Type": image.mime, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" }).send(image.data)
 }))
+
+ticketRouter.get("/external/:externalId", asyncHandler(tryAuthThenApiKey), asyncHandler(async (req, res) => {
+  if (!req.auth!.apiKeyId && !SUPPORT_ROLES.includes(req.auth!.role ?? "")) throw new AppError("Integration or support access required", 403)
+  const externalTicketId = z.string().min(1).max(200).parse(req.params["externalId"])
+  const tickets = await SupportTicketModel.find({ organizationId: req.auth!.organizationId, externalTicketId }).select("status workflowStatus externalTicketId createdAt").sort({ createdAt: -1 }).limit(100).lean()
+  res.json({ tickets })
+}))

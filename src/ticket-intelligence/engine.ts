@@ -5,7 +5,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null
 
 const isUserRole = (value: string): value is TicketUserRole =>
-  value === "student" || value === "employee" || value === "admin"
+  value === "student" || value === "employee" || value === "admin" || value === "customer"
 
 const asNonEmptyString = (value: unknown, field: string): string => {
   if (typeof value !== "string" || value.trim().length === 0) {

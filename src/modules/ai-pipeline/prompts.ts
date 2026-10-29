@@ -32,7 +32,8 @@ OUTPUT JSON SHAPE:
 export const buildClassificationUserPrompt = (
   cleanedTitle: string,
   cleanedDescription: string,
-  keySignals: string[]
+  keySignals: string[],
+  categories: string[] = ["Network", "Login", "Hardware", "Software", "Email", "Access", "Database", "Other"]
 ): string => `
 INPUT:
 - cleaned_title: ${cleanedTitle}
@@ -40,14 +41,14 @@ INPUT:
 - key_signals: ${keySignals.join(", ")}
 
 ALLOWED CATEGORY:
-Network, Login, Hardware, Software, Email, Access, Database, Other
+${JSON.stringify(categories)}
 
 ALLOWED PRIORITY:
 Low, Medium, High, Critical
 
 OUTPUT JSON SHAPE:
 {
-  "category": "Network|Login|Hardware|Software|Email|Access|Database|Other",
+  "category": "one of the allowed categories",
   "priority": "Low|Medium|High|Critical",
   "summary": "string",
   "rationale": "string",

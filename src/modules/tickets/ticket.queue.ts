@@ -1,233 +1,52 @@
-import { logger } from "../../config/logger.js"
 import { randomUUID } from "node:crypto"
+import { SupportTicketModel } from "../../models/SupportTicket.js"
+import { AppError } from "../../lib/errors.js"
+import { logger } from "../../config/logger.js"
 
-export type QueuePayload = {
-  ticketId: string
-  organizationId: string
-  incrementReprocessCount: boolean
-}
-
-type QueueJob = QueuePayload & {
-  jobId: string
-  attempt: number
-  maxAttempts: number
-  createdAt: string
-}
-
-type JobStatus = "queued" | "processing" | "retrying" | "completed" | "dead_letter"
-
-type JobTracking = {
-  jobId: string
-  ticketId: string
-  organizationId: string
-  status: JobStatus
-  attempt: number
-  maxAttempts: number
-  lastError?: string
-  updatedAt: string
-}
-
-type QueueStats = {
-  active: boolean
-  queued: number
-  processing: number
-  retrying: number
-  completed: number
-  deadLetter: number
-}
-
-type ProcessCallback = (payload: QueuePayload) => Promise<void>
-
-/**
- * In-process job queue with retry/backoff and dead-letter tracking.
- *
- * LIMITATION: all state (pending jobs, retry timers, job tracking, dead-letter
- * entries) lives only in this process's memory.
- * - A restart or crash loses every queued, retrying and dead-lettered job; tickets
- *   caught mid-flight stay in "pending"/"processing" in MongoDB with no job to finish them.
- * - It does not work across multiple instances: each process has its own queue, and
- *   GET /health only reports the queue of whichever instance served the request.
- * A persistent broker (e.g. Redis/BullMQ) would be needed to lift this; that is
- * intentionally out of scope for now. See "Known Limitations" in README.md.
- */
+export type QueuePayload = { ticketId: string; organizationId: string; incrementReprocessCount: boolean }
+const LEASE_MS = 10 * 60 * 1000
 export class TicketQueue {
-  private readonly queue: QueueJob[] = []
-  private readonly tracking = new Map<string, JobTracking>()
-  private readonly deadLetter = new Map<string, JobTracking>()
-  private active = false
-  private readonly maxAttempts = 3
-
-  constructor(private readonly processFn: ProcessCallback) {}
-
-  public enqueue(ticketId: string, organizationId: string, incrementReprocessCount = false): { jobId: string } {
-    const job: QueueJob = {
-      jobId: randomUUID(),
-      ticketId,
-      organizationId,
-      attempt: 1,
-      maxAttempts: this.maxAttempts,
-      incrementReprocessCount,
-      createdAt: new Date().toISOString()
-    }
-
-    this.queue.push(job)
-    this.tracking.set(job.jobId, {
-      jobId: job.jobId,
-      ticketId: job.ticketId,
-      organizationId: job.organizationId,
-      status: "queued",
-      attempt: job.attempt,
-      maxAttempts: job.maxAttempts,
-      updatedAt: new Date().toISOString()
-    })
-
-    this.run().catch((error: unknown) => {
-      logger.error({ error }, "Queue run failed")
-    })
-
-    return { jobId: job.jobId }
-  }
-
-  public getJobStatus(jobId: string, organizationId: string): JobTracking | null {
-    const job = this.tracking.get(jobId) ?? this.deadLetter.get(jobId) ?? null
-    // If the job belongs to someone else, hide it
-    if (job && job.organizationId !== organizationId) {
-      return null
-    }
-    return job
-  }
-
-  public stats(organizationId: string): QueueStats {
-    let processing = 0
-    let retrying = 0
-    let completed = 0
-    let queued = 0
-    let deadLetter = 0
-
-    for (const item of this.queue) {
-      if (item.organizationId === organizationId) queued++
-    }
-
-    for (const item of this.tracking.values()) {
-      if (item.organizationId !== organizationId) continue
-      
-      if (item.status === "processing") processing += 1
-      if (item.status === "retrying") retrying += 1
-      if (item.status === "completed") completed += 1
-    }
-
-    for (const item of this.deadLetter.values()) {
-      if (item.organizationId === organizationId) deadLetter += 1
-    }
-
-    return {
-      active: this.active, // Queue runner active state is global
-      queued,
-      processing,
-      retrying,
-      completed,
-      deadLetter
-    }
-  }
-
-  public deadLetterJobs(organizationId: string): JobTracking[] {
-    return [...this.deadLetter.values()].filter(job => job.organizationId === organizationId)
-  }
-
-  private async run(): Promise<void> {
-    if (this.active) {
-      return
-    }
-
-    this.active = true
-    while (this.queue.length > 0) {
-      const job = this.queue.shift()
-      if (!job) {
-        continue
-      }
-
-      this.updateJob(job.jobId, {
-        status: "processing",
-        attempt: job.attempt
+  constructor(private readonly processFn: (payload: QueuePayload) => Promise<void>) {}
+  async enqueue(ticketId: string, organizationId: string, reprocess = false) {
+    if (reprocess) {
+      await SupportTicketModel.updateOne({ _id: ticketId, organizationId, jobStatus: { $nin: ["queued", "processing", "retrying"] } }, {
+        $set: { jobId: randomUUID(), jobStatus: "queued", jobAttempts: 0, jobNextAt: new Date(), status: "pending" }, $inc: { reprocessCount: 1 }, $unset: { jobError: 1, jobToken: 1, jobLeaseUntil: 1 }
       })
-
-      try {
-        await this.processFn({
-          ticketId: job.ticketId,
-          organizationId: job.organizationId,
-          incrementReprocessCount: job.incrementReprocessCount
-        })
-
-        this.updateJob(job.jobId, {
-          status: "completed",
-          attempt: job.attempt
-        })
-      } catch (error) {
-        logger.warn({ error, ticketId: job.ticketId, attempt: job.attempt }, "Ticket processing failed")
-
-        if (job.attempt < this.maxAttempts) {
-          const nextAttempt = job.attempt + 1
-          const delay = 200 * 2 ** (nextAttempt - 1)
-
-          this.updateJob(job.jobId, {
-            status: "retrying",
-            attempt: job.attempt,
-            lastError: error instanceof Error ? error.message : "Unknown processing error"
-          })
-
-          setTimeout(() => {
-            this.queue.push({
-              jobId: job.jobId,
-              ticketId: job.ticketId,
-              organizationId: job.organizationId,
-              attempt: nextAttempt,
-              maxAttempts: job.maxAttempts,
-              createdAt: job.createdAt,
-              incrementReprocessCount: false
-            })
-
-            this.run().catch((runError: unknown) => {
-              logger.error({ error: runError }, "Queue retry run failed")
-            })
-          }, delay)
-        } else {
-          const lastError = error instanceof Error ? error.message : "Unknown processing error"
-
-          this.updateJob(job.jobId, {
-            status: "dead_letter",
-            attempt: job.attempt,
-            lastError
-          })
-
-          const finalState = this.tracking.get(job.jobId)
-          if (finalState) {
-            this.deadLetter.set(job.jobId, finalState)
-          }
-
-          logger.error(
-            { jobId: job.jobId, ticketId: job.ticketId, attempt: job.attempt, error: lastError },
-            "Job moved to dead-letter queue"
-          )
-        }
-      }
     }
-
-    this.active = false
+    const ticket = await SupportTicketModel.findOne({ _id: ticketId, organizationId }).select("jobId jobStatus")
+    if (!ticket) throw new AppError("Ticket not found", 404)
+    return { jobId: ticket.jobId, status: ticket.jobStatus }
   }
-
-  private updateJob(
-    jobId: string,
-    patch: Partial<Pick<JobTracking, "status" | "attempt" | "lastError">>
-  ): void {
-    const current = this.tracking.get(jobId)
-    if (!current) {
-      return
-    }
-
-    this.tracking.set(jobId, {
-      ...current,
-      ...patch,
-      updatedAt: new Date().toISOString()
-    })
+  async stats(organizationId: string) {
+    const count = (jobStatus: string) => SupportTicketModel.countDocuments({ organizationId, jobStatus })
+    const [queued, processing, retrying, completed, deadLetter] = await Promise.all([count("queued"), count("processing"), count("retrying"), count("completed"), count("dead_letter")])
+    return { active: processing > 0, queued, processing, retrying, completed, deadLetter }
+  }
+  async getJobStatus(jobId: string, organizationId: string) {
+    return SupportTicketModel.findOne({ organizationId, jobId }).select("jobId jobStatus jobAttempts jobError updatedAt").lean()
+  }
+  async deadLetterJobs(organizationId: string) {
+    return SupportTicketModel.find({ organizationId, jobStatus: "dead_letter" }).select("jobId jobStatus jobAttempts jobError updatedAt").limit(100).lean()
+  }
+  async runOnce() {
+    const now = new Date(), token = randomUUID()
+    const ticket = await SupportTicketModel.findOneAndUpdate({ $or: [
+      { jobStatus: { $in: ["queued", "retrying"] }, jobNextAt: { $lte: now } },
+      { jobStatus: "processing", jobLeaseUntil: { $lte: now } }
+    ] }, { $set: { jobStatus: "processing", jobToken: token, jobLeaseUntil: new Date(Date.now() + LEASE_MS) }, $inc: { jobAttempts: 1 } }, { new: true, sort: { jobNextAt: 1 } })
+    if (!ticket) return
+    const filter = { _id: ticket._id, jobToken: token }
+    const heartbeat = setInterval(() => {
+      void SupportTicketModel.updateOne(filter, { $set: { jobLeaseUntil: new Date(Date.now() + LEASE_MS) } }).catch(() => logger.warn({}, "Could not renew ticket lease"))
+    }, 30000)
+    heartbeat.unref()
+    try {
+      if (ticket.jobAttempts > 3) throw new Error("Retry limit reached")
+      await this.processFn({ ticketId: ticket._id.toString(), organizationId: ticket.organizationId.toString(), incrementReprocessCount: false })
+      await SupportTicketModel.updateOne(filter, { $set: { jobStatus: "completed" }, $unset: { jobLeaseUntil: 1, jobToken: 1, jobError: 1 } })
+    } catch {
+      await SupportTicketModel.updateOne(filter, { $set: { jobStatus: ticket.jobAttempts >= 3 ? "dead_letter" : "retrying", jobError: "Processing failed; retry or review the ticket.", ...(ticket.jobAttempts >= 3 ? { status: "failed" } : {}), jobNextAt: new Date(Date.now() + 1000 * 2 ** ticket.jobAttempts) }, $unset: { jobLeaseUntil: 1, jobToken: 1 } })
+      if (ticket.jobAttempts >= 3) await SupportTicketModel.updateOne({ _id: ticket._id, workflowStatus: "awaiting_ai", jobStatus: "dead_letter" }, { $set: { workflowStatus: "needs_human", handoffReason: "Processing retry limit reached; support review required." }, $inc: { handoffRevision: 1 } })
+    } finally { clearInterval(heartbeat) }
   }
 }

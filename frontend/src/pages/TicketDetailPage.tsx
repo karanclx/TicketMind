@@ -128,6 +128,11 @@ export const TicketDetailPage = () => {
         </div>
       </section>
 
+      {(ticket.external_ticket_id || ticket.external_customer_id || Object.keys(ticket.metadata ?? {}).length > 0) && <section className="panel"><h2>Company reference</h2>
+        {ticket.external_ticket_id && <p>External ticket: {ticket.external_ticket_id}</p>}
+        {ticket.external_customer_id && <p>External customer: {ticket.external_customer_id}</p>}
+        {Object.entries(ticket.metadata ?? {}).map(([key, value]) => <p key={key}><strong>{key}:</strong> {String(value ?? "—")}</p>)}
+      </section>}
       <EvidencePanel ticket={ticket} />
       <HandoffPanel ticket={ticket} onUpdate={load} />
       <AiResultCard ai={ticket.ai} />

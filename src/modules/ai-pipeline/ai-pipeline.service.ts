@@ -1,3 +1,4 @@
+import { settingsFor, type WorkspaceSettings } from "../workspace/workspace.settings.js"
 import { ZodError, type ZodSchema } from "zod"
 
 import type { IncomingTicket } from "../../ticket-intelligence/types.js"
@@ -17,12 +18,11 @@ import {
 import type { AiPipelineResult, PipelineStepStatus } from "./types.js"
 
 const MAX_RETRIES = env.LLM_MAX_RETRIES
-const CONFIDENCE_MIN = 0.75
 
 export class AiPipelineService {
   constructor(private readonly llmClient: LlmClient = configuredLlmClient) {}
 
-  public async processTicket(ticket: IncomingTicket): Promise<AiPipelineResult> {
+  public async processTicket(ticket: IncomingTicket, settings: WorkspaceSettings = settingsFor()): Promise<AiPipelineResult> {
     let extractionStatus: PipelineStepStatus = "success"
     let classificationStatus: PipelineStepStatus = "success"
     let resolutionStatus: PipelineStepStatus = "success"
@@ -37,9 +37,9 @@ export class AiPipelineService {
       "Extraction"
     )
 
-    if (!extraction || extraction.confidence < CONFIDENCE_MIN) {
+    if (!extraction || extraction.confidence < settings.escalation.minConfidence) {
       extractionStatus = "fallback"
-      const fallback = fallbackAnalyze(ticket)
+      const fallback = (settings.template !== "college_it" ? { category: "Other", priority: "Medium" as const, summary: ticket.title, root_cause: "Not established; staff review required.", suggested_resolution: "Review the complaint and verify the external reference before taking action.", confidence: 0, auto_resolve: false } : fallbackAnalyze(ticket))
       return {
         result: fallback,
         trace: {
@@ -56,16 +56,16 @@ export class AiPipelineService {
           promptFactory.classification(
             extraction.cleaned_title,
             extraction.cleaned_description,
-            extraction.key_signals
+            extraction.key_signals, settings.categories
           )
         ),
-      classificationSchema,
+      classificationSchema.extend({ category: classificationSchema.shape.category.refine(value => settings.categories.includes(value)) }),
       "Classification"
     )
 
-    if (!classification || classification.confidence < CONFIDENCE_MIN) {
+    if (!classification || classification.confidence < settings.escalation.minConfidence) {
       classificationStatus = "fallback"
-      const fallback = fallbackAnalyze(ticket)
+      const fallback = (settings.template !== "college_it" ? { category: "Other", priority: "Medium" as const, summary: ticket.title, root_cause: "Not established; staff review required.", suggested_resolution: "Review the complaint and verify the external reference before taking action.", confidence: 0, auto_resolve: false } : fallbackAnalyze(ticket))
       return {
         result: fallback,
         trace: {
@@ -82,16 +82,16 @@ export class AiPipelineService {
           promptFactory.resolution(
             extraction.cleaned_description,
             classification.category,
-            classification.priority
+            classification.priority, settings.instructions
           )
         ),
       resolutionSchema,
       "Resolution"
     )
 
-    if (!resolution || resolution.confidence < CONFIDENCE_MIN) {
+    if (!resolution || resolution.confidence < settings.escalation.minConfidence) {
       resolutionStatus = "fallback"
-      const fallback = fallbackAnalyze(ticket)
+      const fallback = (settings.template !== "college_it" ? { category: "Other", priority: "Medium" as const, summary: ticket.title, root_cause: "Not established; staff review required.", suggested_resolution: "Review the complaint and verify the external reference before taking action.", confidence: 0, auto_resolve: false } : fallbackAnalyze(ticket))
       return {
         result: fallback,
         trace: {
@@ -113,7 +113,7 @@ export class AiPipelineService {
           ((extraction.confidence + classification.confidence + resolution.confidence) / 3).toFixed(2)
         ),
         auto_resolve:
-          resolution.auto_resolve && classification.priority !== "Critical" && classification.priority !== "High"
+          resolution.auto_resolve && !settings.escalation.priorities.includes(classification.priority)
       },
       trace: {
         extraction: extractionStatus,

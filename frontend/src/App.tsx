@@ -1,3 +1,4 @@
+import { WorkspaceSettingsPage } from "./pages/WorkspaceSettingsPage"
 import { useState } from "react"
 import { Navigate, Route, Routes, useNavigate, Link, NavLink } from "react-router-dom"
 import { useAuth } from "./auth"
@@ -46,9 +47,10 @@ export const App = () => {
         <NavLink to="/my-tickets"><Icon name="ticket" />My tickets</NavLink>
         {["owner", "admin", "agent"].includes(user.role) && <NavLink to="/queue"><Icon name="layers" />Support queue</NavLink>}
         {(user.role === "owner" || user.role === "admin") && <NavLink to="/billing"><Icon name="wallet" />Billing</NavLink>}
+        {["owner", "admin"].includes(user.role) && <NavLink to="/workspace">Workspace</NavLink>}
         <span className="nav-divider" />
         <button className="button-ghost" onClick={() => void handleLogout()} disabled={loggingOut}><Icon name="logout" /><span>{loggingOut ? "Signing out…" : "Log out"}</span></button>
-      </nav> : <span className="header-caption">A little clarity for every IT issue.</span>}
+      </nav> : <span className="header-caption">A little clarity for every support issue.</span>}
     </header>
     <main id="main" className="app-main">
       {error && <p className="error" role="alert">{error}</p>}
@@ -59,6 +61,7 @@ export const App = () => {
         <Route path="/new" element={<Guard><TicketSubmitPage /></Guard>} />
         <Route path="/signup" element={<Guard publicOnly><SignupPage /></Guard>} />
         <Route path="/queue" element={<Guard roles={["owner", "admin", "agent"]}><SupportQueuePage /></Guard>} />
+        <Route path="/workspace" element={<Guard roles={["owner", "admin"]}><WorkspaceSettingsPage /></Guard>} />
         <Route path="/billing" element={<Guard roles={["owner", "admin"]}><BillingPage /></Guard>} />
         <Route path="/billing/success" element={<Guard><SuccessPage /></Guard>} />
         <Route path="/billing/cancel" element={<Guard><CancelPage /></Guard>} />
@@ -67,6 +70,6 @@ export const App = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>
-    <footer className="app-footer"><span>TicketMind <span className="footer-dot">/</span> IT support, with a clearer next step.</span><span>Built for better triage <Icon name="spark" width="14" height="14" /></span></footer>
+    <footer className="app-footer"><span>TicketMind <span className="footer-dot">/</span> Support, with a clearer next step.</span><span>Built for better triage <Icon name="spark" width="14" height="14" /></span></footer>
   </div>
 }

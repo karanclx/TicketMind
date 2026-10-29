@@ -18,7 +18,7 @@ export const tryAuthThenApiKey = async (req: Request, res: Response, next: NextF
   const apiKeyHeader = req.header("X-API-Key")
   if (apiKeyHeader) {
     const prefix = apiKeyHeader.substring(0, 11)
-    const apiKey = await ApiKeyModel.findOne({ keyPrefix: prefix, revokedAt: null })
+    const apiKey = await ApiKeyModel.findOne({ keyPrefix: prefix, revokedAt: null }).select("+keyHash")
     
     if (apiKey) {
       const isValid = await verifyApiKey(apiKeyHeader, apiKey.keyHash)

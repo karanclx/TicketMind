@@ -1,6 +1,6 @@
 import type { TicketDetail } from "../types"
 
-const labels = { pending: "Screening pending", low_signal: "Low synthetic signal", inconclusive: "Inconclusive — review needed", review_required: "Synthetic signal — review needed", unavailable: "Screening unavailable — review needed" }
+const labels = { disabled: "Screening disabled by workspace", pending: "Screening pending", low_signal: "Low synthetic signal", inconclusive: "Inconclusive — review needed", review_required: "Synthetic signal — review needed", unavailable: "Screening unavailable — review needed" }
 export function EvidencePanel({ ticket }: { ticket: TicketDetail }) {
   if (!ticket.images?.length) return null
   return <section className="panel evidence-panel">

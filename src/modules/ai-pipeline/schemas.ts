@@ -9,7 +9,7 @@ export const extractionSchema = z.object({
 })
 
 export const classificationSchema = z.object({
-  category: z.enum(["Network", "Login", "Hardware", "Software", "Email", "Access", "Database", "Other"]),
+  category: z.string().min(1).max(80),
   priority: z.enum(["Low", "Medium", "High", "Critical"]),
   summary: z.string().min(1).max(500),
   rationale: z.string().min(1).max(1200),

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Icon } from "./ui/icon"
 
 import type { TicketRequest } from "../types"
@@ -12,6 +12,11 @@ export const TicketForm = ({ onSubmit }: TicketFormProps) => {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [userRole, setUserRole] = useState<TicketRequest["user_role"]>("student")
+  useEffect(() => {
+    fetch("/workspace/settings", { credentials: "include" }).then(response => response.ok ? response.json() : null).then(value => {
+      if (value?.settings?.template && value.settings.template !== "college_it") setUserRole("customer")
+    }).catch(() => {})
+  }, [])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,7 +58,7 @@ export const TicketForm = ({ onSubmit }: TicketFormProps) => {
           maxLength={300}
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="e.g. Unable to connect to campus Wi-Fi"
+          placeholder="e.g. An item is missing or a service is unavailable"
         />
       </label>
 
@@ -72,6 +77,7 @@ export const TicketForm = ({ onSubmit }: TicketFormProps) => {
       <label className="field">
         <span>Who is reporting the issue?</span>
         <select value={userRole} onChange={(event) => setUserRole(event.target.value as TicketRequest["user_role"])}>
+          <option value="customer">Customer</option>
           <option value="student">Student</option>
           <option value="employee">Employee</option>
           <option value="admin">Administrator</option>
@@ -82,7 +88,7 @@ export const TicketForm = ({ onSubmit }: TicketFormProps) => {
         <span>Image evidence <span className="small-label">OPTIONAL</span></span>
         <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={isSubmitting}
           onChange={event => setFiles(Array.from(event.target.files ?? []))} aria-describedby="image-help" />
-        <small id="image-help">Up to two JPEG, PNG or WebP images, 4 MB each, at least 224px per side. Images are sent to Sightengine for synthetic-content screening; results may require support review.</small>
+        <small id="image-help">Up to two JPEG, PNG or WebP images, 4 MB each, at least 224px per side. If screening is enabled for your workspace, images are sent to Sightengine; results may require support review.</small>
         {files.length > 0 && <small>{files.map(file => file.name).join(" · ")}</small>}
       </label>
       {error ? <p className="error" role="alert">{error}</p> : null}

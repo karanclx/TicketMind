@@ -12,6 +12,9 @@ export const PLAN_QUOTAS: Record<Plan, number> = {
 
 const organizationSchema = new Schema(
   {
+    settings: { type: Schema.Types.Mixed },
+    webhookUrl: { type: String, default: "" },
+    webhookSecret: { type: String, select: false },
     requesterInviteHash: { type: String, select: false, index: true },
     name: { type: String, required: true },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true },

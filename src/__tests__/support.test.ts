@@ -5,6 +5,7 @@ import { handoffSchema } from "../modules/support/support.schemas.js"
 
 const { findTicket, updateTicket, findUser } = vi.hoisted(() => ({ findTicket: vi.fn(), updateTicket: vi.fn(), findUser: vi.fn() }))
 vi.mock("../models/SupportTicket.js", () => ({ SupportTicketModel: { findOne: findTicket, findOneAndUpdate: updateTicket } }))
+vi.mock("../models/Organization.js", () => ({ OrganizationModel: { findById: vi.fn(async () => null) } }))
 vi.mock("../models/User.js", () => ({ UserModel: { findOne: findUser } }))
 import { SupportService } from "../modules/support/support.service.js"
 const service = new SupportService()

@@ -1,3 +1,4 @@
+import { startWorkers } from "../modules/integrations/workers.js"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import mongoose from "mongoose"
 import request from "supertest"
@@ -15,11 +16,15 @@ describe.skipIf(process.env["RUN_MONGO_INTEGRATION"] !== "1")("MongoDB human sup
   const agent = request.agent(app)
   const outsider = request.agent(app)
   const member = request.agent(app)
+  let stopWorkers: (() => Promise<void>) | undefined
   beforeAll(async () => {
     if (env.LLM_PROVIDER !== "mock") throw new Error("Integration checks require LLM_PROVIDER=mock")
-    await mongoose.connect(env.MONGODB_URI, { dbName: database, serverSelectionTimeoutMS: 5000 })
-  }, 10000)
+    await mongoose.connect(env.MONGODB_URI, { dbName: database, serverSelectionTimeoutMS: 15000 })
+    await SupportTicketModel.init()
+    stopWorkers = startWorkers()
+  }, 20000)
   afterAll(async () => {
+    await stopWorkers?.()
     try {
       if (mongoose.connection.name === database && mongoose.connection.readyState === 1) await mongoose.connection.dropDatabase()
     } finally { await mongoose.disconnect() }

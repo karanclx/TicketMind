@@ -1,36 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { Request, Response } from "express"
-
-import { ticketQueue } from "../modules/tickets/ticket.module.js"
-
-import { healthController } from "../modules/health/health.controller.js"
-
-describe("Health API Isolation", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it("filters queue stats, job lookups, and dead-letter jobs by organizationId", async () => {
-    // Enqueue jobs directly via ticketQueue
-    // One for org-a, one for org-b
-    ticketQueue.enqueue("ticket1", "org-a", false)
-    ticketQueue.enqueue("ticket2", "org-b", false)
-
-    const req = {
-      auth: { organizationId: "org-a" },
-      query: {}
-    } as unknown as Request
-
-    const res = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn()
-    }
-
-    await healthController.getHealth(req, res as unknown as Response)
-    
-    expect(res.status).toHaveBeenCalledWith(200)
-    
-    const body = res.json.mock.calls[0][0]
-    expect(body.queue.queued + body.queue.processing + body.queue.deadLetter).toBe(1)
-  })
+import { expect, it, vi } from "vitest"
+const { count, find, one } = vi.hoisted(() => ({ count: vi.fn(async () => 1), find: vi.fn(() => ({ select: () => ({ limit: () => ({ lean: async () => [] }) }) })), one: vi.fn(() => ({ select: () => ({ lean: async () => null }) })) }))
+vi.mock("../models/SupportTicket.js", () => ({ SupportTicketModel: { countDocuments: count, find, findOne: one } }))
+import { TicketQueue } from "../modules/tickets/ticket.queue.js"
+it("scopes durable queue counts, job lookup and dead letters to the workspace", async () => {
+  const queue = new TicketQueue(async () => {})
+  expect((await queue.stats("org-a")).queued).toBe(1)
+  await queue.getJobStatus("job-b", "org-a")
+  await queue.deadLetterJobs("org-a")
+  for (const [filter] of count.mock.calls as unknown as [{ organizationId: string }][]) expect(filter.organizationId).toBe("org-a")
+  expect(one).toHaveBeenCalledWith({ jobId: "job-b", organizationId: "org-a" })
+  expect(find).toHaveBeenCalledWith({ organizationId: "org-a", jobStatus: "dead_letter" })
 })

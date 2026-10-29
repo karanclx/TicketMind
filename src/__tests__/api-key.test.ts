@@ -8,8 +8,9 @@ const { mockFindKey, mockCreateTicket } = vi.hoisted(() => ({
   mockCreateTicket: vi.fn()
 }))
 
+vi.mock("../models/Organization.js", () => ({ OrganizationModel: { findById: vi.fn(async () => null) } }))
 vi.mock("../models/ApiKey.js", () => ({
-  ApiKeyModel: { findOne: mockFindKey }
+  ApiKeyModel: { findOne: (...args: unknown[]) => ({ select: () => mockFindKey(...args) }) }
 }))
 
 // We need to mock verifyApiKey from lib/auth since we mock the model anyway?
@@ -27,6 +28,7 @@ vi.mock("../models/SupportTicket.js", () => ({
   }
 }))
 
+vi.mock("../modules/tickets/ticket.module.js", () => ({ ticketQueue: { enqueue: vi.fn(async () => ({ jobId: "test-job" })) } }))
 // Must import app logic after mocks
 import { ticketRouter } from "../modules/tickets/ticket.routes.js"
 

@@ -1,3 +1,4 @@
+import { z } from "zod"
 import { SUPPORT_ROLES } from "../support/support-policy.js"
 import type { Request, Response } from "express"
 
@@ -8,15 +9,16 @@ import { ticketQueue } from "./ticket.module.js"
 
 export class TicketController {
   public async createTicket(req: Request, res: Response): Promise<void> {
-    const payload = validatePayload(createTicketSchema, req.body)
+    const payload = createTicketSchema.parse(req.body)
     const organizationId = req.auth!.organizationId
     
-    const created = await ticketService.createTicket(payload, organizationId, req.auth?.userId)
-    const queued = ticketQueue.enqueue(created.id, organizationId, false)
+    const created = await ticketService.createTicket(payload, organizationId, req.auth?.userId, req.headers["idempotency-key"] === undefined ? undefined : z.string().min(1).max(200).regex(/^[\x21-\x7e]+$/).parse(req.headers["idempotency-key"]))
+    const queued = await ticketQueue.enqueue(created.id, organizationId, false)
 
     res.status(202).json({
       id: created.id,
-      status: "queued",
+      replayed: created.replayed ?? false,
+      status: queued.status ?? "queued",
       job_id: queued.jobId
     })
   }
@@ -37,11 +39,11 @@ export class TicketController {
     // Verify tenant first (getTicketById throws if it doesn't match or exist)
     await ticketService.getTicketById(id, organizationId)
     
-    const queued = ticketQueue.enqueue(id, organizationId, true)
+    const queued = await ticketQueue.enqueue(id, organizationId, true)
 
     res.status(202).json({
       id,
-      status: "queued",
+      status: queued.status ?? "queued",
       job_id: queued.jobId
     })
   }

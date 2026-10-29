@@ -1,3 +1,8 @@
+import type { AnalyzedTicket } from "../../ticket-intelligence/types.js"
+import { createHash } from "node:crypto"
+import { settingsFor } from "../workspace/workspace.settings.js"
+import { AppError } from "../../lib/errors.js"
+import { ticketEvent } from "../integrations/events.js"
 import { prepareImages, analyzeImage } from "../evidence/evidence.service.js"
 import { handoffDecision } from "../support/support-policy.js"
 
@@ -15,13 +20,26 @@ import { OrganizationModel } from "../../models/Organization.js"
 import type { CreateTicketInput } from "./ticket.schemas.js"
 
 export class TicketService {
-  public async createTicket(input: CreateTicketInput, organizationId: string, createdBy?: string): Promise<{ id: string }> {
+  public async createTicket(input: CreateTicketInput, organizationId: string, createdBy?: string, idempotencyKey?: string): Promise<{ id: string; replayed?: boolean }> {
     const normalizedTitle = input.title.trim()
     const normalizedDescription = input.description.trim()
 
+    const canonical = { ...input, metadata: Object.fromEntries(Object.entries(input.metadata ?? {}).sort(([a], [b]) => a.localeCompare(b))) }
+    const requestHash = createHash("sha256").update(JSON.stringify(canonical)).digest("hex")
+    const findReplay = async () => {
+      const existing = await SupportTicketModel.findOne({ organizationId, idempotencyKey }).select("+requestHash")
+      if (!existing) return null
+      if (existing.requestHash !== requestHash || existing.createdBy?.toString() !== createdBy) throw new AppError("Idempotency key already used for a different request", 409, "IDEMPOTENCY_CONFLICT")
+      return { id: existing._id.toString(), replayed: true }
+    }
+    if (idempotencyKey) { const replay = await findReplay(); if (replay) return replay }
+    const workspace = settingsFor(await OrganizationModel.findById(organizationId))
     const images = await prepareImages(input.images ?? [])
+    try {
     const ticket = await SupportTicketModel.create({
-      images,
+      ...(idempotencyKey ? { idempotencyKey, requestHash } : {}),
+      externalTicketId: input.external_ticket_id, externalCustomerId: input.external_customer_id, metadata: input.metadata,
+      images, assignedTeam: workspace.teams[0],
       organizationId: new Types.ObjectId(organizationId),
       rawInput: {
         title: input.title,
@@ -36,6 +54,10 @@ export class TicketService {
     })
 
     return { id: ticket._id.toString() }
+    } catch (error) {
+      if (idempotencyKey && error && typeof error === "object" && "code" in error && error.code === 11000) { const replay = await findReplay(); if (replay) return replay }
+      throw error
+    }
   }
 
   public async getTicketById(id: string, organizationId: string, requesterId?: string): Promise<Record<string, unknown>> {
@@ -57,6 +79,8 @@ export class TicketService {
     return {
       id: ticket._id.toString(),
       status: ticket.status,
+      job: { id: ticket.jobId, status: ticket.jobStatus, attempts: ticket.jobAttempts },
+      external_ticket_id: ticket.externalTicketId ?? null, external_customer_id: ticket.externalCustomerId ?? null, metadata: ticket.metadata ?? {},
       images: (ticket.images ?? []).map(image => ({
         id: image._id.toString(), name: image.name, status: image.status,
         score: image.score, model: image.detectorModel, checked_at: image.checkedAt,
@@ -118,6 +142,7 @@ export class TicketService {
     }
     await ticket.save()
 
+    let settings = settingsFor()
     try {
       const organization = await OrganizationModel.findById(organizationId)
       if (!organization) {
@@ -128,8 +153,9 @@ export class TicketService {
         await organization.save()
       }
 
+      settings = settingsFor(organization)
       const startedAt = performance.now()
-      let aiOutputResult
+      let aiOutputResult: AnalyzedTicket
       let provider = "llm-pipeline-v1"
       let model = "three-step-or-fallback"
       
@@ -153,7 +179,7 @@ export class TicketService {
           description: rawInput.description,
           user_role: rawInput.userRole,
           timestamp: rawInput.timestamp.toISOString()
-        })
+        }, settings)
         aiOutputResult = pipelineResult.result
         const usedFallback = Object.values(pipelineResult.trace).includes("fallback")
         provider = usedFallback ? "deterministic-fallback" : env.LLM_PROVIDER
@@ -163,11 +189,15 @@ export class TicketService {
         await organization.save()
       }
       
+      if (!settings.categories.includes(aiOutputResult.category)) aiOutputResult.category = "Other"
+      if (provider === "deterministic-fallback" && settings.template !== "college_it") {
+        aiOutputResult = { category: "Other", priority: "Medium", summary: ticket.normalizedTitle, root_cause: "Not established; staff review required.", suggested_resolution: "Review the complaint and verify the external reference before taking action.", confidence: 0, auto_resolve: false }
+      }
       // Load private bytes only while processing, never in ticket JSON responses.
       if (ticket.images?.length) {
         const withBytes = await SupportTicketModel.findOne({ _id: id, organizationId }).select("+images.data")
         for (const image of withBytes?.images ?? []) {
-          const result = image.data ? await analyzeImage(Buffer.from(image.data), image.mime) : { status: "unavailable", score: null, detectorModel: "", checkedAt: new Date() }
+          const result = !settings.imageScreening ? { status: "disabled", score: null, detectorModel: "", checkedAt: new Date() } : image.data ? await analyzeImage(Buffer.from(image.data), image.mime) : { status: "unavailable", score: null, detectorModel: "", checkedAt: new Date() }
           const target = ticket.images.find(item => item._id.equals(image._id))
           if (target) Object.assign(target, result)
         }
@@ -182,30 +212,39 @@ export class TicketService {
         provider,
         model,
         processingMs
+      }).catch(async (error: unknown) => {
+        if (error && typeof error === "object" && "code" in error && error.code === 11000) {
+          // A prior worker may have saved this version before crashing mid-commit.
+          return AiResultModel.findOne({ ticketId: ticket._id, version: nextVersion }).orFail()
+        }
+        throw error
       })
+      aiOutputResult = aiResult.result as AnalyzedTicket ?? aiOutputResult
+      provider = aiResult.provider ?? provider
 
-      ticket.latestAiResultId = aiResult._id
-      ticket.aiVersion = nextVersion
-      ticket.lastProcessedAt = new Date()
-      ticket.status = "processed"
-      await ticket.save()
       // Only initialize a handoff once. Never overwrite work already claimed or resolved by a human.
-      const decision = handoffDecision(aiOutputResult, provider)
-      if (ticket.images?.some(image => image.status !== "low_signal")) {
+      const decision = handoffDecision(aiOutputResult, provider, settings)
+      if (ticket.images?.some(image => !["low_signal", "disabled"].includes(image.status))) {
         decision.workflowStatus = "needs_human"
         decision.handoffReason = "Image evidence needs support review. Screening is inconclusive, flagged, or unavailable; it is not a fraud verdict."
       }
       await SupportTicketModel.updateOne({
         _id: id, organizationId,
-        $or: [{ workflowStatus: "awaiting_ai" }, { workflowStatus: { $exists: false } }, ...(ticket.images?.some(image => image.status !== "low_signal") ? [{ workflowStatus: "awaiting_confirmation" }] : [])]
+        $or: [{ workflowStatus: "awaiting_ai" }, { workflowStatus: { $exists: false } }, ...(ticket.images?.some(image => !["low_signal", "disabled"].includes(image.status)) ? [{ workflowStatus: "awaiting_confirmation" }] : [])]
       }, { $set: decision, $inc: { handoffRevision: 1 } })
+      const completion: Record<string, unknown> = { latestAiResultId: aiResult._id, aiVersion: nextVersion, lastProcessedAt: new Date(), status: "processed" }
+      for (const [index, image] of (ticket.images ?? []).entries()) {
+        for (const field of ["status", "score", "detectorModel", "checkedAt"] as const) completion[`images.${index}.${field}`] = image[field]
+      }
+      // Persist evidence, completion and its notification in one atomic ticket write.
+      await SupportTicketModel.updateOne({ _id: id, organizationId }, { $set: completion, $push: { pendingEvents: ticketEvent("analysis.completed", id, { ai_version: nextVersion }) } })
     } catch (error) {
       ticket.status = "failed"
       await ticket.save()
       await SupportTicketModel.updateOne({
         _id: id, organizationId,
         $or: [{ workflowStatus: "awaiting_ai" }, { workflowStatus: { $exists: false } }]
-      }, { $set: { workflowStatus: "needs_human", assignedTeam: "IT Helpdesk", handoffReason: "Automatic processing failed; support staff review required." }, $inc: { handoffRevision: 1 } })
+      }, { $set: { workflowStatus: "needs_human", assignedTeam: settings.teams[0], handoffReason: "Automatic processing failed; support staff review required." }, $inc: { handoffRevision: 1 } })
       throw error
     }
   }

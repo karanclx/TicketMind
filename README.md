@@ -36,7 +36,7 @@ Before using TicketMind in a production environment, be aware of the following a
 - **Security Review needed**: This pass adds basic authentication and tenant isolation, but the application has not had a full security review.
 - **No rate limiting on login**: There is no brute-force protection or rate-limiting on login/signup endpoints.
 - **No password reset flow**: Forgotten passwords cannot currently be recovered.
-- **Single-node architecture**: The queue (`TicketQueue`) and state are entirely in-memory. A restart loses queued jobs, and multiple instances will not share queue state.
+- **Single-process deployment recommended**: Jobs and webhook deliveries persist in MongoDB with leases and retries. Provider pacing and usage counters are not distributed. See the integration guide for recovery and delivery guarantees.
 - **Billing is NOT production-ready**: The Stripe integration handles the happy path, but has not been tested against Stripe's test-clock tooling for subscription lifecycle edge cases (trial-to-paid transitions, mid-cycle upgrades). No proration testing has been done beyond Stripe's defaults. There is no handling for a customer with multiple subscriptions (shouldn't be possible via this flow, but not defensively checked), and no automated dunning/retry messaging beyond what Stripe's own smart retries do.
 
 ## Tech Stack
@@ -261,3 +261,7 @@ Existing owner accounts and tickets are preserved. To test both sides, keep your
 ### Image evidence screening
 
 Tickets can include two private images screened by Sightengine's hosted `genai` model. See [the image screening setup guide](docs/IMAGE_INFERENCE_SETUP.md) for free-account credentials, testing and limitations. No local AI server is required. Screening is advisory and never approves or rejects refunds.
+
+### Universal workspaces and company integrations
+
+Owners/admins can open **Workspace** to select College IT, Food Delivery or E-commerce templates, customize categories/teams/routing/escalation, manage API keys and configure signed webhooks. Ticket creation supports external references, flat metadata and `Idempotency-Key`. Processing jobs and webhook delivery records persist in MongoDB. See [the company integration guide](docs/COMPANY_INTEGRATION_SETUP.md) for API examples, webhook verification and deployment limitations.

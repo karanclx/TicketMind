@@ -1,3 +1,6 @@
+import { OrganizationModel } from "../../models/Organization.js"
+import { settingsFor } from "../workspace/workspace.settings.js"
+import { ticketEvent } from "../integrations/events.js"
 import { Types, type FilterQuery } from "mongoose"
 import { SupportTicketModel, type SupportTicket } from "../../models/SupportTicket.js"
 import { UserModel } from "../../models/User.js"
@@ -66,6 +69,7 @@ export class SupportService {
       case "assign":
         if (!staff) throw new AppError("Support staff role required", 403, "FORBIDDEN")
         if (status === "resolved") throw new ValidationError("Reopen the ticket before assigning it")
+        if (input.team && !settingsFor(await OrganizationModel.findById(actor.organizationId)).teams.includes(input.team)) throw new ValidationError("Select a team configured for this workspace")
         if (!input.team) throw new ValidationError("Select a support team")
         if (input.assignee_id) {
           const assignee = await UserModel.findOne({ _id: input.assignee_id, organizationId: actor.organizationId, role: { $in: SUPPORT_ROLES } }).lean()
@@ -95,7 +99,7 @@ export class SupportService {
     const updated = await SupportTicketModel.findOneAndUpdate({
       _id: id, organizationId: actor.organizationId,
       ...(revision === 0 ? { $or: [{ handoffRevision: 0 }, { handoffRevision: { $exists: false } }] } : { handoffRevision: revision })
-    }, { $set: patch, $inc: { handoffRevision: 1 } }, { new: true, runValidators: true }).lean()
+    }, { $set: patch, $inc: { handoffRevision: 1 }, $push: { pendingEvents: ticketEvent("ticket.updated", id, { action: input.action, revision: revision + 1, workflow: patch }) } }, { new: true, runValidators: true }).lean()
     if (!updated) throw new AppError("Ticket changed. Refresh and try again.", 409, "CONFLICT")
     return { success: true }
   }

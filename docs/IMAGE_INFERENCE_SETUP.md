@@ -71,11 +71,11 @@ These thresholds are illustrative and have not been calibrated on refund/food ph
 
 - **Unavailable:** verify both credentials, dashboard quota, outbound network access and restart after `.env` changes. Wait for rate limits to clear before reprocessing.
 - **Upload rejected:** check format, dimensions, count and size. File extensions alone are not trusted; images must decode successfully.
-- **Stuck after backend restart:** the current queue is in memory. Support can reprocess interrupted tickets.
+- **After backend restart:** MongoDB-backed jobs resume automatically; interrupted processing waits for its lease to expire (up to ten minutes). Support can reprocess dead-lettered jobs.
 - **Multiple backend instances:** the pacing is per process, not distributed. Use one backend instance for the demo or add a shared limiter before scaling.
 
 Tests: `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`, `npm run frontend:build`. The test scripts clear image credentials; provider tests use mocked responses and do not spend your quota. A successful live upload with your own credentials is still needed to verify account access; mocked tests do not measure detector accuracy.
 
-Images remain private MongoDB data (up to 8 MB of image bytes per ticket). For a larger SaaS, add private object storage, retention/deletion, storage quotas, and durable jobs. This feature does not include duplicate-image matching, C2PA verification or order validation.
+Images remain private MongoDB data (up to 8 MB of image bytes per ticket). For a larger SaaS, add private object storage, retention/deletion and storage quotas. Jobs now persist in MongoDB. See [company integration setup](COMPANY_INTEGRATION_SETUP.md). This feature does not include duplicate-image matching, C2PA verification or order validation.
 
 Official references: [API request and response documentation](https://sightengine.com/docs/ai-generated-image-detection), [Free and paid plan details](https://sightengine.com/pricing).

@@ -10,7 +10,7 @@ export type TicketCategory =
 
 export type TicketPriority = "Low" | "Medium" | "High" | "Critical"
 
-export type TicketUserRole = "student" | "employee" | "admin"
+export type TicketUserRole = "student" | "employee" | "admin" | "customer"
 
 export type IncomingTicket = {
   title: string
@@ -20,7 +20,7 @@ export type IncomingTicket = {
 }
 
 export type AnalyzedTicket = {
-  category: TicketCategory
+  category: string
   priority: TicketPriority
   summary: string
   root_cause: string

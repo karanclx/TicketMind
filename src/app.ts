@@ -1,3 +1,4 @@
+import { workspaceRouter } from "./modules/workspace/workspace.routes.js"
 import { asyncHandler } from "./lib/async-handler.js"
 import { tryAuthThenApiKey } from "./middleware/try-auth-then-api-key.js"
 import { supportRouter } from "./modules/support/support.routes.js"
@@ -32,6 +33,10 @@ export const createApp = () => {
   // Mount the rest of the billing routes (they use express.json since it's above)
   app.use("/billing", billingRouter)
 
+  app.use("/workspace", (req, res, next) => {
+    if (env.NODE_ENV === "production" && req.method === "GET" && req.path === "/" && req.headers.accept?.includes("text/html")) return next()
+    workspaceRouter(req, res, next)
+  })
   app.use("/support", supportRouter)
   app.use("/auth", authRoutes)
   app.use("/health", healthRouter)
